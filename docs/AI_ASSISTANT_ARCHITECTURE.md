@@ -230,6 +230,10 @@ V3 conversation is currently **client-session memory**, not a long-term database
 - Refreshing the page starts a new conversation.
 - No chat transcript is persisted in SQLite in the current implementation.
 
+Before calling the model, the backend resolves only safe, explicit follow-up context from that window. It can carry forward the most recent named month range or merchant when the new question uses an unambiguous reference such as “what about August?”, “same period”, or “overall”. It does not create durable user profiles or infer missing facts.
+
+Each assistant reply also includes an `evidence` list for the UI. It identifies the confirmed local-data source, the resolved period when one was used, and the read-only tool that supplied the result. This lets a person distinguish a grounded finance answer from a model-only response without exposing internal prompts.
+
 This design is intentional for privacy and simplicity. A future enhancement could add an opt-in, encrypted local conversation history, but it is not required for correct finance answers.
 
 ## 10. Date interpretation

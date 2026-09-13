@@ -48,26 +48,28 @@ public class LocalAssistantService {
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
+        DateRange resolvedRange = resolveRange(question, safeConversation);
+        String resolvedMerchant = resolveMerchant(question, safeConversation);
         List<Map<String, Object>> messages = new ArrayList<>();
-        messages.add(message("system", systemPrompt()));
+        messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)));
         safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
         messages.add(message("user", question.trim()));
         try {
-            return modelFirstAnswer(question, safeConversation, messages);
+            return modelFirstAnswer(question, safeConversation, messages, resolvedRange);
         } catch (ResponseStatusException exception) {
             return directAnswer(question, safeConversation)
                     .orElseThrow(() -> exception);
         }
     }
 
-    private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages) {
+    private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange) {
         JsonNode first = complete(messages, true);
         JsonNode assistantMessage = first.path("choices").path(0).path("message");
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);
         if (calls.isEmpty()) {
             return directAnswer(question, conversation)
-                    .orElse(new AssistantChatResponse(content(assistantMessage), List.of(), model, "MODEL_RESPONSE"));
+                    .orElse(new AssistantChatResponse(content(assistantMessage), List.of(), model, "MODEL_RESPONSE", List.of("No finance-data tool was used for this response.")));
         }
 
         messages.add(objectMapper.convertValue(assistantMessage, Map.class));
@@ -80,34 +82,33 @@ public class LocalAssistantService {
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));
         }
         JsonNode finalResponse = complete(messages, false);
-        return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL");
+        return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL", evidence(resolvedRange, toolsUsed));
     }
 
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation) {
         String normalized = question.toLowerCase(Locale.ROOT);
-        DateRange range = dateRange(question);
+        DateRange range = resolveRange(question, conversation);
         if (normalized.contains("credit utilization")) {
             FinanceToolsService.CreditUtilization data = financeTools.creditUtilization();
             boolean perCard = normalized.contains("each card") || normalized.contains("by card") || normalized.contains("per card");
             String answer = perCard ? cardUtilizationAnswer(data) : "Your overall credit utilization is " + percent(data.utilizationPercent()) + ". This is based on " + money(data.utilized()) + " utilized out of " + money(data.totalLimit()) + " in total credit limit.";
-            return Optional.of(new AssistantChatResponse(answer, List.of("get_credit_utilization"), model, "FALLBACK"));
+            return Optional.of(new AssistantChatResponse(answer, List.of("get_credit_utilization"), model, "FALLBACK", evidence(null, List.of("get_credit_utilization"))));
         }
         if (normalized.contains("spend by category") || normalized.contains("spending by category")) {
             if (range == null && normalized.contains("last month")) range = lastMonth();
             if (range != null) {
                 List<com.pradeep.finance.dashboard.DashboardSummary.CategoryTotal> categories = financeTools.categorySpending(range.from(), range.to());
                 String items = categories.isEmpty() ? "No confirmed spending was found." : categories.stream().map(item -> item.category() + ": " + money(item.amount())).reduce((left, right) -> left + "\n- " + right).orElse("");
-                return Optional.of(new AssistantChatResponse("Confirmed spending by category for " + range.label() + ":\n- " + items, List.of("get_category_spending"), model, "FALLBACK"));
+                return Optional.of(new AssistantChatResponse("Confirmed spending by category for " + range.label() + ":\n- " + items, List.of("get_category_spending"), model, "FALLBACK", evidence(range, List.of("get_category_spending"))));
             }
         }
-        String merchant = merchant(question);
-        if (merchant == null && normalized.startsWith("overall")) merchant = conversation.stream().filter(item -> "user".equals(item.role())).map(item -> merchant(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+        String merchant = resolveMerchant(question, conversation);
         if (merchant != null) {
             List<com.pradeep.finance.transaction.TransactionResponse> transactions = financeTools.searchTransactions(null, range == null ? null : range.from(), range == null ? null : range.to(), null, merchant);
             BigDecimal spending = transactions.stream().map(item -> item.accountType() == com.pradeep.finance.account.AccountType.CREDIT_CARD ? item.amount() : item.amount().negate()).filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
             String period = range == null ? "across all saved history" : "for " + range.label();
             String answer = transactions.isEmpty() ? "I found no confirmed transactions for " + merchant + " " + period + "." : "You spent " + money(spending) + " at " + merchant + " " + period + " across " + transactions.size() + " transaction" + (transactions.size() == 1 ? "." : "s.");
-            return Optional.of(new AssistantChatResponse(answer, List.of("search_transactions"), model, "FALLBACK"));
+            return Optional.of(new AssistantChatResponse(answer, List.of("search_transactions"), model, "FALLBACK", evidence(range, List.of("search_transactions"))));
         }
         return Optional.empty();
     }
@@ -116,7 +117,27 @@ public class LocalAssistantService {
         DateRange lastMonth = lastMonth();
         return "You are the Personal Finance Tracker assistant. For factual finance questions, use available finance tools before answering. Use only tool results for facts. Today is " + LocalDate.now() + ". 'Last month' means " + lastMonth.label() + "; do not ask the user to provide those dates. 'Overall' means all saved history unless the question is about credit utilization. When a month name has no year, use the current year. Never invent transactions, values, dates, or financial advice. Tools are read-only.";
     }
+    private String contextPrompt(DateRange range, String merchant) {
+        List<String> context = new ArrayList<>();
+        if (range != null) context.add("resolved period: " + range.label());
+        if (merchant != null) context.add("resolved merchant: " + merchant);
+        return context.isEmpty() ? "" : " Current conversation context: " + String.join("; ", context) + ". Use it only when it directly resolves the user's follow-up.";
+    }
+    private List<String> evidence(DateRange range, List<String> tools) {
+        List<String> result = new ArrayList<>();
+        result.add("Confirmed saved finance data");
+        if (range != null) result.add("Period: " + range.label());
+        if (!tools.isEmpty()) result.add("Tool: " + String.join(", ", tools));
+        return List.copyOf(result);
+    }
     private DateRange lastMonth() { YearMonth month = YearMonth.now().minusMonths(1); return new DateRange(month.atDay(1), month.atEndOfMonth()); }
+    private DateRange resolveRange(String question, List<AssistantConversationMessage> conversation) {
+        DateRange explicit = dateRange(question);
+        if (explicit != null) return explicit;
+        if (question.toLowerCase(Locale.ROOT).contains("last month")) return lastMonth();
+        if (!usesPriorContext(question)) return null;
+        return conversation.stream().filter(item -> "user".equals(item.role())).map(item -> dateRange(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+    }
     private DateRange dateRange(String question) {
         Matcher matcher = MONTH_NAME.matcher(question);
         List<Integer> months = new ArrayList<>(); while (matcher.find()) months.add(monthNumber(matcher.group(1)));
@@ -126,6 +147,15 @@ public class LocalAssistantService {
     }
     private int monthNumber(String name) { return java.time.Month.valueOf(name.toUpperCase(Locale.ROOT)).getValue(); }
     private String merchant(String question) { Matcher matcher = MERCHANT.matcher(question.trim()); return matcher.find() ? matcher.group(1).trim() : null; }
+    private String resolveMerchant(String question, List<AssistantConversationMessage> conversation) {
+        String explicit = merchant(question);
+        if (explicit != null || !usesPriorContext(question)) return explicit;
+        return conversation.stream().filter(item -> "user".equals(item.role())).map(item -> merchant(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+    }
+    private boolean usesPriorContext(String question) {
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return normalized.startsWith("overall") || normalized.contains("what about") || normalized.contains("same period") || normalized.contains("that period") || normalized.contains("that merchant");
+    }
     private String cardUtilizationAnswer(FinanceToolsService.CreditUtilization data) {
         String cards = data.cards().stream().map(card -> card.accountName() + ": " + percent(card.utilizationPercent()) + " used (" + money(card.statementBalance()) + " of " + money(card.creditLimit()) + ")").reduce((left, right) -> left + "\n- " + right).orElse("No card snapshots are available.");
         return "Your overall credit utilization is " + percent(data.utilizationPercent()) + ". By card:\n- " + cards;

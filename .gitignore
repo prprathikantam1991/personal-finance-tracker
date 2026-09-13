@@ -1,0 +1,28 @@
+# Local financial data and imported source documents — never commit
+backend/data/
+finance-tracker-incoming/
+finance-tracker-archive/
+*.db
+*.sqlite
+*.sqlite3
+*.pdf
+
+# Local model/provider configuration
+.env
+.env.*
+!.env.example
+**/*secret*
+**/*token*
+
+# Build artifacts and dependencies
+backend/target/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/cache/
+
+# IDE and operating-system files
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

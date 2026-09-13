@@ -1,0 +1,9 @@
+ALTER TABLE statement_imports ADD COLUMN statement_balance NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN credit_limit NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN available_credit NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN fees_charged NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN interest_charged NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN minimum_payment NUMERIC;
+ALTER TABLE statement_imports ADD COLUMN payment_due_date TEXT;
+ALTER TABLE statement_imports ADD COLUMN cycle_start_date TEXT;
+ALTER TABLE statement_imports ADD COLUMN cycle_end_date TEXT;

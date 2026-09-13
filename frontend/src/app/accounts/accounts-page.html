@@ -1,0 +1,58 @@
+<section class="page-heading">
+  <div>
+    <p class="eyebrow">YOUR ACCOUNTS</p>
+    <h1>Accounts</h1>
+    <p class="intro">Accounts are created automatically when a statement is confidently identified during import.</p>
+  </div>
+  <button type="button" class="secondary-button" disabled title="Accounts are added from statement imports in V1">Add account</button>
+</section>
+@if (!loading() && accounts().length) { @if (totalCreditLimit()) { <section class="credit-overview"><div><p class="overview-label">TOTAL CREDIT UTILIZATION</p><h2>{{ overallUtilization() | number: '1.0-1' }}% used</h2><p>{{ totalCreditUsed() | currency }} of {{ totalCreditLimit() | currency }} total credit limit</p>@if (previousOverallUtilization() !== null) { <span class="utilization-change" [class.up]="overallUtilization()! > previousOverallUtilization()!" [class.down]="overallUtilization()! < previousOverallUtilization()!">{{ overallUtilization()! > previousOverallUtilization()! ? '↑' : overallUtilization()! < previousOverallUtilization()! ? '↓' : '–' }} {{ Math.abs(overallUtilization()! - previousOverallUtilization()!) | number: '1.0-1' }}% vs prior statements</span> }</div><div class="overall-credit-numbers"><span>Available <strong>{{ totalCreditAvailable() | currency }}</strong></span><span>Utilized <strong>{{ totalCreditUsed() | currency }}</strong></span></div><div class="utilization-track"><span [style.width.%]="overallUtilization()"></span></div></section> } <section class="portfolio-summary"><div><span>Cash across checking & savings</span><strong>{{ cashBalance() | currency }}</strong></div><div><span>Credit-card balance</span><strong class="debt">{{ cardDebt() | currency }}</strong></div><div><span>Net position</span><strong [class.debt]="netPosition() < 0">{{ netPosition() | currency }}</strong></div></section> }
+
+@if (loading()) {
+  <section class="status-card" aria-live="polite">Loading your accounts…</section>
+} @else if (loadError()) {
+  <section class="status-card error" role="alert">
+    <h2>We couldn’t load your accounts</h2>
+    <p>Make sure the Finance Tracker backend is running, then try again.</p>
+    <button type="button" class="primary-button" (click)="loadAccounts()">Try again</button>
+  </section>
+} @else if (accounts().length === 0) {
+  <section class="status-card empty">
+    <div class="empty-icon" aria-hidden="true">⌁</div>
+    <h2>No accounts yet</h2>
+    <p>Upload your first bank or card statement. We’ll identify and save the account automatically.</p>
+  </section>
+} @else {
+  <div class="filter-bar" aria-label="Filter accounts by type">
+    @for (filter of filters; track filter.value) {
+      <button type="button" class="filter-button" [class.active]="selectedType() === filter.value" (click)="selectType(filter.value)">{{ filter.label }}</button>
+    }
+  </div>
+  @if (filteredAccounts().length === 0) {
+    <section class="status-card empty"><h2>No {{ selectedType().toLowerCase().replace('_', ' ') }} accounts yet</h2><p>Try another filter or import a statement for this account type.</p></section>
+  } @else {
+  <section class="account-groups" aria-label="Saved accounts">
+    @for (group of accountGroups(); track group.label) {
+      <section class="account-group"><h2>{{ group.label }}</h2><div class="accounts-grid">
+    @for (account of group.accounts; track account.id) {
+      <a class="account-card" [routerLink]="['/accounts', account.id, 'history']" [class.card-account]="account.accountType === 'CREDIT_CARD'" [class.savings-account]="account.accountType === 'SAVINGS'" [class.checking-account]="account.accountType === 'CHECKING'" [attr.aria-label]="'View details and history for ' + account.name">
+        <div class="card-header"><span class="account-type">{{ accountTypeLabel(account.accountType) | titlecase }}</span><span class="currency">{{ account.currency }}</span></div>
+        <h2>{{ account.name }}</h2>
+        <p class="institution">{{ account.institution }}</p>
+        @if (account.statementBalance !== null && account.statementBalance !== undefined) {
+          <div class="primary-balance"><span>{{ account.accountType === 'CREDIT_CARD' ? 'Statement balance' : 'Ending balance' }}</span><strong>{{ account.statementBalance | currency }}</strong></div>
+          @if (account.cycleEndDate) { <p class="as-of">As of {{ account.cycleEndDate | date: 'mediumDate' }}</p> }
+          @if (account.nextExpectedStatementDate) { <p class="next-statement">Next statement expected around {{ account.nextExpectedStatementDate | date: 'mediumDate' }}</p> }
+        }
+        @if (account.accountType === 'CREDIT_CARD' && account.creditLimit !== null) {
+          <div class="credit-summary">@if (account.creditUtilizationPercent !== null && account.creditUtilizationPercent !== undefined) { <div class="card-utilization"><div><span>Credit used</span><strong>{{ account.creditUtilizationPercent | number: '1.0-1' }}%</strong></div><div class="utilization-track"><span [style.width.%]="account.creditUtilizationPercent"></span></div>@if (utilizationChange(account) !== null) { <small [class.up]="utilizationChange(account)! > 0" [class.down]="utilizationChange(account)! < 0">{{ utilizationChange(account)! > 0 ? '↑' : utilizationChange(account)! < 0 ? '↓' : '–' }} {{ Math.abs(utilizationChange(account)!) | number: '1.0-1' }} points from prior statement</small> }</div> }@if (account.minimumPayment !== null && account.minimumPayment !== undefined) { <div class="credit-row minimum-payment"><span>Min. payment</span><strong>{{ account.minimumPayment | currency }}@if (account.paymentDueDate) { <small> due {{ account.paymentDueDate | date: 'mediumDate' }}</small> }</strong></div> }<div class="credit-row"><span>Limit</span><strong>{{ account.creditLimit | currency }}</strong></div>@if (account.availableCredit !== null && account.availableCredit !== undefined) { <div class="credit-row"><span>Available</span><strong>{{ account.availableCredit | currency }}</strong></div> }</div>
+        }
+        <div class="account-number"><span>Account ending</span><strong>{{ account.lastFour ? '•••• ' + account.lastFour : 'Not available' }}</strong></div>
+        <span class="history-link">View account details &amp; history <span aria-hidden="true">→</span></span><p class="saved-date">Added {{ account.createdAt | date: 'mediumDate' }}</p>
+      </a>
+    }
+      </div></section>
+    }
+  </section>
+  }
+}

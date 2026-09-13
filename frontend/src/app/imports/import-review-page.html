@@ -1,0 +1,9 @@
+@if (review(); as item) {
+  <section class="heading"><p>IMPORT REVIEW</p><h1>{{ item.originalFilename }}</h1><span [class.confirmed]="item.status === 'CONFIRMED'">{{ item.status === 'CONFIRMED' ? 'Confirmed' : 'Needs review' }}</span><a class="cancel" routerLink="/imports">Cancel</a></section>
+  @if (error()) { <p class="error">{{ error() }}</p> }
+  @if (item.status === 'CONFIRMED') { <section class="done"><h2>Import finalized</h2><p>{{ item.transactions.length }} transactions are now available in Transactions.</p><a routerLink="/transactions">View transactions</a></section> } @else {
+    <p class="intro">Correct any row below, remove rows that do not belong, then confirm the import.</p>
+    <div class="table"><table><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Balance</th><th></th></tr></thead><tbody>@for (row of item.transactions; track row.id) { <tr><td><input #date type="date" [value]="row.date" /></td><td><input #description [value]="row.description" /></td><td><input #amount type="number" step="0.01" [value]="row.amount" /></td><td><input #balance type="number" step="0.01" [value]="row.balance ?? ''" /></td><td><button (click)="save(row, date.value, description.value, amount.value, balance.value)">Save</button><button class="delete" (click)="remove(row)">Delete</button></td></tr> }</tbody></table></div>
+    <button class="confirm" [disabled]="busy()" (click)="confirm()">Confirm {{ item.transactions.length }} transactions</button>
+  }
+} @else { <p>Loading import…</p> }

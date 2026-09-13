@@ -1,0 +1,54 @@
+<section class="page-heading">
+  <div><p class="eyebrow">STATEMENT IMPORT</p><h1>Import a statement</h1><p>Upload a CSV or text-based PDF. Your original file stays on this computer.</p></div>
+</section>
+
+@if (!result()) {
+  <section class="upload-card">
+    <label class="file-picker" for="statement-file">
+      <span class="upload-icon" aria-hidden="true">↑</span>
+      <strong>{{ selectedFile()?.name ?? 'Choose a statement file' }}</strong>
+      <span>{{ selectedFile() ? (selectedFile()!.size / 1024 | number: '1.0-0') + ' KB' : 'CSV or text-based PDF · up to 10 MB' }}</span>
+    </label>
+    <input id="statement-file" type="file" accept=".csv,.pdf,text/csv,application/pdf" (change)="selectFile($event)" />
+    @if (error()) { <p class="error" role="alert">{{ error() }}</p> }
+    <button type="button" class="primary-button" [disabled]="importing()" (click)="upload()">
+      {{ importing() ? 'Reading statement…' : 'Upload and preview' }}
+    </button>
+  </section>
+  <section class="automation-card">
+    <div><p class="eyebrow">AUTOMATIC IMPORTS</p><h2>Drop statements into your incoming folder</h2><p><code>W:\projects\finance-tracker-incoming</code> is checked every 30 seconds while the local app is running. Successfully handled files are archived automatically.</p></div>
+  </section>
+  <section class="inbox-section">
+    <div class="section-title"><div><p class="eyebrow">INCOMING FOLDER</p><h2>Waiting for attention</h2><p>Files move to the archive after a confident, fully parsed import. Only exceptions stay here.</p></div></div>
+    @if (incoming().length) { <div class="inbox-list">@for (item of incoming(); track item.filename) { <article class="inbox-row"><div><strong>{{ item.filename }}</strong><p>{{ item.message }}</p></div><span class="inbox-status" [class.attention]="item.status === 'NEEDS_ATTENTION' || item.status === 'FAILED'">{{ item.status === 'NEEDS_ATTENTION' ? 'Needs attention' : item.status === 'AWAITING_PROCESSING' ? 'Waiting' : item.status }}</span></article> }</div> }
+    @else { <div class="empty-history">Nothing waiting — the incoming folder is clear.</div> }
+  </section>
+} @else {
+  <section class="result-header">
+    <div><p class="eyebrow">READY FOR REVIEW</p><h2>{{ result()!.originalFilename }}</h2></div>
+    <button type="button" class="secondary-button" (click)="reset()">Import another</button>
+  </section>
+  <section class="account-result" [class.confirmation]="result()!.accountIdentification.status === 'CONFIRMATION_REQUIRED'">
+    <p class="result-label">Account detection</p>
+    @if (result()!.accountIdentification.account; as account) {
+      <h3>{{ result()!.accountIdentification.status === 'CREATED' ? 'New account created' : 'Existing account matched' }}</h3>
+      <p>{{ account.name }} · {{ account.institution }} · ending {{ account.lastFour }}</p>
+    } @else {
+      <h3>Account confirmation needed</h3><p>{{ result()!.accountIdentification.message }}</p>
+    }
+  </section>
+  @if (result()!.warnings.length) { <section class="warnings">@for (warning of result()!.warnings; track warning) { <p>{{ warning }}</p> }</section> }
+  <section class="transactions-section"><div class="section-title"><div><h2>Parsed transactions</h2><p>{{ result()!.transactions.length }} transaction{{ result()!.transactions.length === 1 ? '' : 's' }} found. Editing and confirmation are the next V1 slice.</p></div></div>
+    @if (result()!.transactions.length) { <div class="table-wrap"><table><thead><tr><th>Date</th><th>Description</th><th>Amount</th><th>Balance</th></tr></thead><tbody>@for (transaction of result()!.transactions; track $index) { <tr><td>{{ transaction.date | date: 'mediumDate' }}</td><td>{{ transaction.description }}</td><td [class.negative]="transaction.amount < 0">{{ transaction.amount | currency }}</td><td>{{ transaction.balance === null ? '—' : (transaction.balance | currency) }}</td></tr> }</tbody></table></div> }
+  </section>
+}
+
+<section class="history-section">
+  <div class="section-title"><div><p class="eyebrow">IMPORT HISTORY</p><h2>Recent statement imports</h2><p>Review any import that still needs confirmation before its transactions become final.</p></div></div>
+  @if (historyError()) { <p class="error">{{ historyError() }}</p> }
+  @if (history().length) {
+    <div class="table-wrap"><table class="history-table"><thead><tr><th>Statement</th><th>Account</th><th>Added</th><th>Source</th><th>Transactions</th><th>Status</th><th></th></tr></thead><tbody>
+      @for (item of history(); track item.importId) { <tr><td><strong>{{ item.originalFilename }}</strong></td><td>{{ item.accountName ?? 'Account confirmation needed' }}</td><td>{{ item.importedAt | date: 'mediumDate' }}</td><td><span class="source-pill">{{ item.source === 'WATCHED_FOLDER' ? 'Watched folder' : 'Manual upload' }}</span></td><td>{{ item.transactionCount }}</td><td><span class="status-pill" [class.confirmed]="item.status === 'CONFIRMED'">{{ item.status === 'CONFIRMED' ? 'Confirmed' : 'Review required' }}</span></td><td><button type="button" class="review-link" (click)="reviewImport(item.importId)">{{ item.status === 'CONFIRMED' ? 'View' : 'Review' }}</button></td></tr> }
+    </tbody></table></div>
+  } @else { <div class="empty-history">No statements have been imported yet.</div> }
+</section>

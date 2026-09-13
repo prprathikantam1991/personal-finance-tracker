@@ -1,0 +1,29 @@
+<section class="page-heading">
+  <div><p class="eyebrow">SAVED ACTIVITY</p><h1>Transactions</h1><p>Review every transaction saved from your imported statements.</p></div>
+</section>
+
+<section class="filters" aria-label="Filter transactions">
+  <label>Account
+    <select (change)="updateAccount($event)" [value]="selectedAccountId()"><option value="">All accounts</option>@for (account of accounts(); track account.id) { <option [value]="account.id">{{ account.name }}</option> }</select>
+  </label>
+  <label>From <input type="date" (change)="updateFrom($event)" [value]="fromDate()" /></label>
+  <label>To <input type="date" (change)="updateTo($event)" [value]="toDate()" /></label>
+  <label>Category <select (change)="updateCategory($event)" [value]="selectedCategory()"><option value="">All categories</option>@for (category of categories(); track category) { <option [value]="category">{{ category }}</option> }</select></label>
+  <label>Review status <select (change)="updateConfidence($event)" [value]="selectedConfidence()"><option value="">All transactions</option><option value="NEEDS_REVIEW">Needs category review</option></select></label>
+  <label class="search">Search <input type="search" placeholder="Merchant or description" (input)="updateSearch($event)" [value]="search()" /></label>
+  <button type="button" class="clear-button" (click)="clearFilters()">Clear</button>
+</section>
+
+@if (loading()) {
+  <section class="status-card">Loading transactions…</section>
+} @else if (loadError()) {
+  <section class="status-card error"><h2>We couldn’t load transactions</h2><button type="button" class="primary-button" (click)="loadTransactions()">Try again</button></section>
+} @else if (visibleTransactions().length === 0) {
+  <section class="status-card"><h2>No transactions found</h2><p>Import a statement or adjust the filters above.</p></section>
+} @else {
+  @if (categoryMessage()) { <p class="save-message" role="status">{{ categoryMessage() }}</p> }
+  <p class="result-count">{{ visibleTransactions().length }} transaction{{ visibleTransactions().length === 1 ? '' : 's' }}</p>
+  <div class="table-wrap"><table><thead><tr><th>Date</th><th>Merchant</th><th>Category</th><th>Account</th><th>Status</th><th class="amount">Amount</th><th class="amount">Balance</th></tr></thead><tbody>
+    @for (transaction of visibleTransactions(); track transaction.id) { <tr><td>{{ transaction.date | date: 'mediumDate' }}</td><td class="description"><strong>{{ transaction.merchantName }}</strong><span>{{ transaction.description }}</span></td><td>@if (transaction.transferGroupId) { Transfer } @else if (transaction.category === 'Uncategorized' || editingCategoryId() === transaction.id) { <select #category [value]="transaction.category">@for (option of categoryOptions; track option) { <option [value]="option">{{ option }}</option> }</select><button type="button" class="clear-button" (click)="saveCategory(transaction, category.value, true)">Save + remember</button>@if (transaction.category !== 'Uncategorized') { <button type="button" class="clear-button" (click)="cancelCategoryEdit()">Cancel</button> } } @else { {{ transaction.category }} <button type="button" class="clear-button" (click)="editCategory(transaction.id)">Change</button> }</td><td>{{ transaction.accountName ?? 'Needs confirmation' }}</td><td><span class="status" [class.confirmed]="transaction.status === 'CONFIRMED'">{{ transaction.status.replace('_', ' ') | titlecase }}</span></td><td class="amount" [class.credit-positive]="transaction.accountType === 'CREDIT_CARD' && transaction.amount > 0" [class.credit-negative]="transaction.accountType === 'CREDIT_CARD' && transaction.amount < 0" [class.cash-positive]="transaction.accountType !== 'CREDIT_CARD' && transaction.amount > 0" [class.cash-negative]="transaction.accountType !== 'CREDIT_CARD' && transaction.amount < 0">{{ transaction.amount | currency }}</td><td class="amount">{{ transaction.balance === null ? '—' : (transaction.balance | currency) }}</td></tr> }
+  </tbody></table></div>
+}

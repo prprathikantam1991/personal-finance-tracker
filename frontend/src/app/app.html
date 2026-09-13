@@ -1,0 +1,16 @@
+<div class="app-shell">
+  <header class="top-bar">
+    <a class="brand" routerLink="/accounts" aria-label="Finance Tracker home">
+      <span class="brand-mark" aria-hidden="true">F</span><span>Finance Tracker</span>
+    </a>
+    <nav aria-label="Main navigation">
+      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+      <a routerLink="/accounts" routerLinkActive="active">Accounts</a>
+      <a routerLink="/imports" routerLinkActive="active">Imports</a>
+      <a routerLink="/transactions" routerLinkActive="active">Transactions</a>
+      <a routerLink="/notifications" routerLinkActive="active">Notifications</a>
+      <a routerLink="/assistant" routerLinkActive="active">Assistant</a>
+    </nav>
+  </header>
+  <main class="page-content"><router-outlet /></main>
+</div>

@@ -1,0 +1,231 @@
+@if (error()) {
+  <section class="card">
+    We could not load this account’s history. <a routerLink="/accounts">Return to Accounts</a>
+  </section>
+} @else if (!history()) {
+  <section class="card">Loading account history…</section>
+} @else {
+  <a class="back" routerLink="/accounts">← Accounts</a>
+  <section class="heading">
+    <p>ACCOUNT HISTORY</p>
+    <h1>{{ history()!.account.name }}</h1>
+    <span
+      >{{ history()!.account.institution }} ·
+      {{
+        history()!.account.lastFour
+          ? '•••• ' + history()!.account.lastFour
+          : 'Account number unavailable'
+      }}</span
+    >
+  </section>
+  <section class="metrics">
+    <article>
+      <span>{{
+        history()!.account.accountType === 'CREDIT_CARD' ? 'Statement balance' : 'Latest balance'
+      }}</span
+      ><strong>{{ history()!.account.statementBalance | currency }}</strong>
+    </article>
+    @if (
+      history()!.account.accountType === 'CREDIT_CARD' && history()!.account.creditLimit !== null
+    ) {
+      <article>
+        <span>Available / limit</span
+        ><strong
+          >{{ history()!.account.availableCredit | currency }}
+          <small>of {{ history()!.account.creditLimit | currency }}</small></strong
+        >
+      </article>
+      @if (history()!.account.creditUtilizationPercent !== null && history()!.account.creditUtilizationPercent !== undefined) {
+        <article class="utilization-metric">
+          <span>Credit utilization</span><strong>{{ history()!.account.creditUtilizationPercent | number: '1.0-1' }}%</strong>
+          <div class="utilization-track"><span [style.width.%]="history()!.account.creditUtilizationPercent"></span></div>
+          @if (history()!.account.previousCreditUtilizationPercent !== null && history()!.account.previousCreditUtilizationPercent !== undefined) {
+            <small [class.negative]="history()!.account.creditUtilizationPercent! > history()!.account.previousCreditUtilizationPercent!" [class.positive]="history()!.account.creditUtilizationPercent! < history()!.account.previousCreditUtilizationPercent!">{{ history()!.account.creditUtilizationPercent! > history()!.account.previousCreditUtilizationPercent! ? '↑' : history()!.account.creditUtilizationPercent! < history()!.account.previousCreditUtilizationPercent! ? '↓' : '–' }} {{ Math.abs(history()!.account.creditUtilizationPercent! - history()!.account.previousCreditUtilizationPercent!) | number: '1.0-1' }}% vs prior statement</small>
+          }
+        </article>
+      }
+    } @else {
+      <article>
+        <span>Snapshots saved</span><strong>{{ history()!.snapshots.length }}</strong>
+      </article>
+    }
+  </section>
+  <section class="card">
+    <h2>Current account snapshot</h2>
+    <div class="details-grid">
+      <section>
+        <h3>Statement activity</h3>
+        <dl>
+          <div>
+            <dt>Statement period</dt>
+            <dd>
+              @if (history()!.account.cycleStartDate) {
+                {{ history()!.account.cycleStartDate | date: 'mediumDate' }} –
+              }
+              {{ history()!.account.cycleEndDate | date: 'mediumDate' }}
+            </dd>
+          </div>
+          @if (history()!.account.beginningBalance !== null) {
+            <div>
+              <dt>Beginning balance</dt>
+              <dd>{{ history()!.account.beginningBalance | currency }}</dd>
+            </div>
+          }
+          @if (history()!.account.totalCredits !== null) {
+            <div>
+              <dt>Credits</dt>
+              <dd class="positive">{{ history()!.account.totalCredits | currency }}</dd>
+            </div>
+          }
+          @if (history()!.account.totalDebits !== null) {
+            <div>
+              <dt>Debits</dt>
+              <dd>{{ history()!.account.totalDebits | currency }}</dd>
+            </div>
+          }
+          <div>
+            <dt>Ending balance</dt>
+            <dd>{{ history()!.account.statementBalance | currency }}</dd>
+          </div>
+        </dl>
+      </section>
+      @if (history()!.account.accountType === 'CREDIT_CARD') {
+        <section>
+          <h3>Card details</h3>
+          <dl>
+            @if (history()!.account.currentApr !== null) {
+              <div>
+                <dt>Current APR</dt>
+                <dd>{{ history()!.account.currentApr }}%</dd>
+              </div>
+            }
+            @if (history()!.account.promotionalApr !== null) {
+              <div>
+                <dt>Promotional APR</dt>
+                <dd>{{ history()!.account.promotionalApr }}%@if (history()!.account.promotionalAprExpiresOn) { <small> through {{ history()!.account.promotionalAprExpiresOn | date:'mediumDate' }}</small> }</dd>
+              </div>
+            }
+            @if (history()!.account.penaltyApr !== null) {
+              <div>
+                <dt>Penalty APR</dt>
+                <dd>{{ history()!.account.penaltyApr }}%</dd>
+              </div>
+            }
+            @if (history()!.account.minimumPayment !== null) {
+              <div>
+                <dt>Minimum payment</dt>
+                <dd>
+                  {{ history()!.account.minimumPayment | currency }}
+                  @if (history()!.account.paymentDueDate) {
+                    <small> due {{ history()!.account.paymentDueDate | date: 'mediumDate' }}</small>
+                  }
+                </dd>
+              </div>
+            }
+            @if (history()!.account.feesCharged !== null) {
+              <div>
+                <dt>Statement fees</dt>
+                <dd>{{ history()!.account.feesCharged | currency }}</dd>
+              </div>
+            }
+            @if (history()!.account.interestCharged !== null) {
+              <div>
+                <dt>Interest charged</dt>
+                <dd>{{ history()!.account.interestCharged | currency }}</dd>
+              </div>
+            }
+          </dl>
+        </section>
+      } @else {
+        <section>
+          <h3>Interest information</h3>
+          <dl>
+            @if (history()!.account.interestEarned !== null) {
+              <div>
+                <dt>Interest earned</dt>
+                <dd class="positive">{{ history()!.account.interestEarned | currency }}</dd>
+              </div>
+            }
+            @if (history()!.account.annualInterestRate !== null) {
+              <div>
+                <dt>Interest rate</dt>
+                <dd>{{ history()!.account.annualInterestRate }}%</dd>
+              </div>
+            }
+            @if (history()!.account.annualPercentageYield !== null) {
+              <div>
+                <dt>APY</dt>
+                <dd>{{ history()!.account.annualPercentageYield }}%</dd>
+              </div>
+            }
+            @if (
+              history()!.account.interestEarned === null &&
+              history()!.account.annualPercentageYield === null
+            ) {
+              <p>No interest information appears on the latest statement.</p>
+            }
+          </dl>
+        </section>
+      }
+    </div>
+  </section>
+  <section class="card">
+    <h2>Balance history</h2>
+    @if (!history()!.snapshots.length) {
+      <p>No statement snapshots yet.</p>
+    } @else if (history()!.snapshots.length === 1) {
+      <p class="chart-empty">One statement snapshot is saved. The balance trend will appear after the next statement is imported.</p>
+    } @else {
+      <div class="chart">
+        @for (item of history()!.snapshots; track item.importedAt) {
+          <button type="button" class="point" [class.selected]="selectedSnapshot()?.importedAt === item.importedAt" (click)="selectSnapshot(item)" [attr.aria-label]="'View statement ending ' + snapshotDate(item)">
+            <span
+              class="bar {{ balanceBarClass() }}"
+              [style.height.%]="balanceHeight(item.endingBalance)"
+            ></span
+            ><small>{{ snapshotDate(item) | date: 'MMM yy' }}</small>
+          </button>
+        }
+      </div>
+      @if (selectedSnapshot(); as selected) { <div class="selected-snapshot"><strong>{{ snapshotDate(selected) | date: 'mediumDate' }}</strong><span>Ending balance <b>{{ selected.endingBalance | currency }}</b></span>@if (balanceChange(selected); as change) { <span>Change <b [class.positive]="change > 0" [class.negative]="change < 0">{{ change > 0 ? '+' : '' }}{{ change | currency }}</b></span> }@if (selected.totalCredits !== null) { <span>Credits {{ selected.totalCredits | currency }}</span> }@if (selected.totalDebits !== null) { <span>Debits {{ selected.totalDebits | currency }}</span> }</div> }
+    }
+  </section>
+  <section class="card">
+    <h2>Statement history</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Period ending</th>
+            <th>Beginning</th>
+            <th>Credits</th>
+            <th>Debits</th>
+            <th>Ending</th>
+            <th>Interest / APY</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of history()!.snapshots; track item.importedAt) {
+            <tr>
+              <td>{{ snapshotDate(item) | date: 'mediumDate' }}</td>
+              <td>{{ item.beginningBalance | currency }}</td>
+              <td class="positive">{{ item.totalCredits | currency }}</td>
+              <td>{{ item.totalDebits | currency }}</td>
+              <td>
+                <strong>{{ item.endingBalance | currency }}</strong>
+              </td>
+              <td>
+                @if (item.interestEarned !== null) {
+                  {{ item.interestEarned | currency }}
+                }
+                @if (item.annualPercentageYield !== null) {
+                  <span> · {{ item.annualPercentageYield }}%</span>
+                }
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+}

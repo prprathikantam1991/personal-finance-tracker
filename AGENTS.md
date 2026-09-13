@@ -28,3 +28,9 @@
 - Use `docs/REQUEST_FLOWS.md` for runtime behavior.
 - Use `docs/DESIGN_DECISIONS.md` to record meaningful technical decisions.
 - Use `docs/AI_ASSISTANT_ARCHITECTURE.md` for the detailed V3 assistant design.
+
+## Delivery tracking
+
+- GitHub Project #4 is the source of truth for delivery status. Keep it minimal: Version = iteration, Issue = meaningful unit of work, Status = Planned / In Progress / Done.
+- Before meaningful implementation, use or create a focused GitHub Issue linked to the relevant version issue. Complete work only after verification, required documentation updates, an Issue reference in the commit or PR where practical, and closing the Issue.
+- Do not reconstruct granular historical work for completed V1, V1.5, or V2. V3 is current; V4 is upcoming; V5 is future.

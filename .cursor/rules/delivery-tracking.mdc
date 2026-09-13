@@ -1,0 +1,14 @@
+---
+description: Lightweight GitHub Project delivery tracking for the Personal Finance Tracker
+alwaysApply: true
+---
+
+# Delivery Tracking
+
+- GitHub Project #4 is the delivery-tracking source of truth.
+- Use Version = iteration, GitHub Issue = meaningful unit of work, and only Planned / In Progress / Done statuses.
+- Before meaningful implementation, check for an existing issue. Create a focused issue when needed and link it to its version issue.
+- Move work to In Progress when implementation begins. After verification and required documentation updates, reference the issue in the commit or PR, move it to Done, and close it.
+- Keep completed V1, V1.5, and V2 as their existing high-level issues. Do not reconstruct their individual history.
+- Keep V3 current, V4 upcoming, and V5 future. Do not implement V4 or V5 work until the iteration is started.
+- Split scope only when it is independently meaningful; do not create issues for classes, methods, or trivial edits.

@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,8 +16,10 @@ import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
@@ -37,11 +40,15 @@ public class LocalAssistantService {
     public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper,
                                  @Value("${finance.assistant.lm-studio.base-url}") String baseUrl,
                                  @Value("${finance.assistant.lm-studio.model}") String model,
-                                 @Value("${finance.assistant.lm-studio.api-key:}") String apiKey) {
+                                 @Value("${finance.assistant.lm-studio.api-key:}") String apiKey,
+                                 @Value("${finance.assistant.lm-studio.timeout-ms:30000}") long timeoutMs) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
         this.model = model;
-        RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl);
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
+        requestFactory.setReadTimeout(Duration.ofMillis(Math.max(timeoutMs, 1000)));
+        RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory);
         if (apiKey != null && !apiKey.isBlank()) builder.defaultHeader("Authorization", "Bearer " + apiKey);
         this.restClient = builder.build();
     }
@@ -173,10 +180,19 @@ public class LocalAssistantService {
         if (includeTools) { request.put("tools", toolDefinitions()); request.put("tool_choice", "auto"); }
         try {
             JsonNode response = restClient.post().uri("/chat/completions").contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
-            if (response == null || response.path("choices").isEmpty()) throw new IllegalStateException("LM Studio returned no completion.");
+            if (response == null || response.path("choices").isEmpty() || response.path("choices").path(0).path("message").isMissingNode()) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model returned an unusable response. Try again, or reload the model in LM Studio.");
+            }
             return response;
+        } catch (ResponseStatusException exception) {
+            throw exception;
+        } catch (ResourceAccessException exception) {
+            if (isTimeout(exception)) {
+                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "The local model took longer than expected. It may still be loading; wait a moment and try again.", exception);
+            }
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready. Start its local server and load a model, then try again.", exception);
         } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The local LM Studio model is unavailable. Confirm its server and model are running.", exception);
+            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready. Start its local server and load a model, then try again.", exception);
         }
     }
 
@@ -189,7 +205,7 @@ public class LocalAssistantService {
             case "get_recurring_activity" -> financeTools.recurringActivity();
             case "compare_periods" -> financeTools.comparePeriods(requiredDate(args, "from"), requiredDate(args, "to"), requiredDate(args, "compareFrom"), requiredDate(args, "compareTo"));
             case "search_transactions" -> financeTools.searchTransactions(text(args, "accountId"), date(args, "from"), date(args, "to"), text(args, "category"), text(args, "merchant"));
-            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The requested assistant tool is not allowed.");
+            default -> throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action. Try again, or reload the model in LM Studio.");
         };
     }
 
@@ -209,7 +225,15 @@ public class LocalAssistantService {
     private Map<String, Object> stringProperty() { return Map.of("type", "string"); }
     private Map<String, Object> message(String role, String content) { return Map.of("role", role, "content", content); }
     private String content(JsonNode message) { String value = message.path("content").asText("").trim(); return value.isBlank() ? "I could not produce an answer from the available local data." : value; }
-    private JsonNode parseArguments(String value) { try { return objectMapper.readTree(value); } catch (JsonProcessingException exception) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "The local model returned invalid tool arguments."); } }
+    private boolean isTimeout(Throwable exception) {
+        Throwable current = exception;
+        while (current != null) {
+            if (current instanceof java.net.SocketTimeoutException || current instanceof java.net.http.HttpTimeoutException) return true;
+            current = current.getCause();
+        }
+        return false;
+    }
+    private JsonNode parseArguments(String value) { try { return objectMapper.readTree(value); } catch (JsonProcessingException exception) { throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model returned invalid tool instructions. Try again, or reload the model in LM Studio."); } }
     private String json(Object value) { try { return objectMapper.writeValueAsString(value); } catch (JsonProcessingException exception) { throw new IllegalStateException("Could not prepare finance tool result.", exception); } }
     private LocalDate date(JsonNode args, String field) { String value = text(args, field); return value == null ? null : LocalDate.parse(value); }
     private LocalDate requiredDate(JsonNode args, String field) { LocalDate value = date(args, field); if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + "."); return value; }

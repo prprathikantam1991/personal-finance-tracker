@@ -234,6 +234,26 @@ Before calling the model, the backend resolves only safe, explicit follow-up con
 
 Each assistant reply also includes an `evidence` list for the UI. It identifies the confirmed local-data source, the resolved period when one was used, and the read-only tool that supplied the result. This lets a person distinguish a grounded finance answer from a model-only response without exposing internal prompts.
 
+## 9.1. Failure handling and evaluation
+
+Every LM Studio completion has a configurable 30-second read limit (`LM_STUDIO_TIMEOUT_MS`). The backend treats the following as model-side failures, never as user mistakes:
+
+| Situation | HTTP result | User recovery guidance |
+|---|---|---|
+| LM Studio cannot be reached | `503` | Start the local server and load a model. |
+| Model takes too long | `504` | Wait briefly for the model to finish loading, then try again. |
+| Model response or tool instruction is invalid | `502` | Try again; if repeated, reload the local model. |
+
+The Assistant page maps these cases to plain-language messages. It does not expose stack traces, raw prompts, or transaction data in errors.
+
+The V3 evaluation set is run whenever the prompt, tool contracts, date handling, or local model changes:
+
+1. Overall credit utilization → `get_credit_utilization`.
+2. Category spending for last month → `get_category_spending` with the previous calendar month.
+3. Merchant spending for named months → `search_transactions` with the merchant and resolved range.
+4. Follow-up “What about August?” after a named merchant/month → the same merchant plus August's range.
+5. Unavailable, slow, and malformed model responses → a safe `503`, `504`, or `502` response or an applicable deterministic fallback.
+
 This design is intentional for privacy and simplicity. A future enhancement could add an opt-in, encrypted local conversation history, but it is not required for correct finance answers.
 
 ## 10. Date interpretation

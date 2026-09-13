@@ -28,8 +28,14 @@ export class AssistantPage {
     const conversation = this.messages().slice(0, -1).slice(-12).map(message => ({ role: message.role, text: message.text }));
     this.http.post<AssistantReply>('http://localhost:8080/api/assistant/chat', { message: question, conversation }).subscribe({
       next: reply => { this.messages.update(messages => [...messages, { role: 'assistant', text: reply.answer, toolsUsed: reply.toolsUsed, evidence: reply.evidence }]); this.sending.set(false); },
-      error: response => { this.error.set(response.error?.detail ?? 'The local assistant could not respond. Confirm LM Studio and its model are running.'); this.sending.set(false); },
+      error: response => { this.error.set(this.assistantError(response.status, response.error?.detail)); this.sending.set(false); },
     });
+  }
+  private assistantError(status: number, detail?: string): string {
+    if (status === 504) return 'Your local model is taking longer than expected. It may still be loading—wait a moment and try again.';
+    if (status === 502) return 'Your local model returned an unusable response. Try again, or reload the model in LM Studio.';
+    if (status === 503 || status === 0) return 'LM Studio is not ready. Start its local server and load a model, then try again.';
+    return detail ?? 'The local assistant could not respond. Please try again.';
   }
   protected toolLabel(tool: string): string { return tool.replace(/^get_/, '').replaceAll('_', ' '); }
 }

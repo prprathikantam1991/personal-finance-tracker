@@ -47,17 +47,28 @@ public class LocalAssistantService {
     }
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
-        Optional<AssistantChatResponse> direct = directAnswer(question, conversation == null ? List.of() : conversation);
-        if (direct.isPresent()) return direct.get();
+        List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt()));
-        if (conversation != null) conversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
+        safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
         messages.add(message("user", question.trim()));
+        try {
+            return modelFirstAnswer(question, safeConversation, messages);
+        } catch (ResponseStatusException exception) {
+            return directAnswer(question, safeConversation)
+                    .orElseThrow(() -> exception);
+        }
+    }
+
+    private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages) {
         JsonNode first = complete(messages, true);
         JsonNode assistantMessage = first.path("choices").path(0).path("message");
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);
-        if (calls.isEmpty()) return new AssistantChatResponse(content(assistantMessage), List.of(), model);
+        if (calls.isEmpty()) {
+            return directAnswer(question, conversation)
+                    .orElse(new AssistantChatResponse(content(assistantMessage), List.of(), model, "MODEL_RESPONSE"));
+        }
 
         messages.add(objectMapper.convertValue(assistantMessage, Map.class));
         List<String> toolsUsed = new ArrayList<>();
@@ -69,7 +80,7 @@ public class LocalAssistantService {
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));
         }
         JsonNode finalResponse = complete(messages, false);
-        return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model);
+        return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL");
     }
 
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation) {
@@ -79,14 +90,14 @@ public class LocalAssistantService {
             FinanceToolsService.CreditUtilization data = financeTools.creditUtilization();
             boolean perCard = normalized.contains("each card") || normalized.contains("by card") || normalized.contains("per card");
             String answer = perCard ? cardUtilizationAnswer(data) : "Your overall credit utilization is " + percent(data.utilizationPercent()) + ". This is based on " + money(data.utilized()) + " utilized out of " + money(data.totalLimit()) + " in total credit limit.";
-            return Optional.of(new AssistantChatResponse(answer, List.of("get_credit_utilization"), model));
+            return Optional.of(new AssistantChatResponse(answer, List.of("get_credit_utilization"), model, "FALLBACK"));
         }
         if (normalized.contains("spend by category") || normalized.contains("spending by category")) {
             if (range == null && normalized.contains("last month")) range = lastMonth();
             if (range != null) {
                 List<com.pradeep.finance.dashboard.DashboardSummary.CategoryTotal> categories = financeTools.categorySpending(range.from(), range.to());
                 String items = categories.isEmpty() ? "No confirmed spending was found." : categories.stream().map(item -> item.category() + ": " + money(item.amount())).reduce((left, right) -> left + "\n- " + right).orElse("");
-                return Optional.of(new AssistantChatResponse("Confirmed spending by category for " + range.label() + ":\n- " + items, List.of("get_category_spending"), model));
+                return Optional.of(new AssistantChatResponse("Confirmed spending by category for " + range.label() + ":\n- " + items, List.of("get_category_spending"), model, "FALLBACK"));
             }
         }
         String merchant = merchant(question);
@@ -96,7 +107,7 @@ public class LocalAssistantService {
             BigDecimal spending = transactions.stream().map(item -> item.accountType() == com.pradeep.finance.account.AccountType.CREDIT_CARD ? item.amount() : item.amount().negate()).filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
             String period = range == null ? "across all saved history" : "for " + range.label();
             String answer = transactions.isEmpty() ? "I found no confirmed transactions for " + merchant + " " + period + "." : "You spent " + money(spending) + " at " + merchant + " " + period + " across " + transactions.size() + " transaction" + (transactions.size() == 1 ? "." : "s.");
-            return Optional.of(new AssistantChatResponse(answer, List.of("search_transactions"), model));
+            return Optional.of(new AssistantChatResponse(answer, List.of("search_transactions"), model, "FALLBACK"));
         }
         return Optional.empty();
     }

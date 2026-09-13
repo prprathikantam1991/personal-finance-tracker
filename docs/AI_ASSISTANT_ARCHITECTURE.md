@@ -219,7 +219,7 @@ flowchart LR
     V -.fallback only.-> F[Direct structured response]
 ```
 
-Direct routes should become a fallback only when a model returns invalid tool arguments, refuses an unambiguous question, or asks for dates that are already clear. Before making that change, evaluate a larger/tool-tuned local model and collect a small test set of expected questions. See Section 15.
+This LLM-first route is implemented. `LocalAssistantService` sends the tool catalog to LM Studio before considering deterministic routing. A direct structured response is used only when the local model is unavailable, returns invalid tool arguments, or returns no tool call for a question the application can answer safely. The API reports `MODEL_TOOL_CALL`, `MODEL_RESPONSE`, or `FALLBACK` as `executionMode` so endpoint tests can verify the route used.
 
 ## 9. Conversation memory
 

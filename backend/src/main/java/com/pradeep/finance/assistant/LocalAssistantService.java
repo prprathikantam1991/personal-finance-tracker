@@ -41,7 +41,7 @@ public class LocalAssistantService {
                                  @Value("${finance.assistant.lm-studio.base-url}") String baseUrl,
                                  @Value("${finance.assistant.lm-studio.model}") String model,
                                  @Value("${finance.assistant.lm-studio.api-key:}") String apiKey,
-                                 @Value("${finance.assistant.lm-studio.timeout-ms:30000}") long timeoutMs) {
+                                 @Value("${finance.assistant.lm-studio.timeout-ms:60000}") long timeoutMs) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
         this.model = model;

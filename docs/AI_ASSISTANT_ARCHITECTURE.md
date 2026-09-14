@@ -236,7 +236,7 @@ Each assistant reply also includes an `evidence` list for the UI. It identifies 
 
 ## 9.1. Failure handling and evaluation
 
-Every LM Studio completion has a configurable 30-second read limit (`LM_STUDIO_TIMEOUT_MS`). The backend treats the following as model-side failures, never as user mistakes:
+Every LM Studio completion has a configurable 60-second read limit (`LM_STUDIO_TIMEOUT_MS`). This is deliberately generous for local models, which can take longer to load or to complete a two-step tool-call exchange. The backend treats the following as model-side failures, never as user mistakes:
 
 | Situation | HTTP result | User recovery guidance |
 |---|---|---|

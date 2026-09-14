@@ -9,7 +9,9 @@ import org.springframework.stereotype.Service;
 
 import com.pradeep.finance.account.AccountOverviewResponse;
 import com.pradeep.finance.account.AccountOverviewService;
+import com.pradeep.finance.account.AccountHistoryResponse;
 import com.pradeep.finance.account.AccountType;
+import com.pradeep.finance.account.StatementSnapshot;
 import com.pradeep.finance.dashboard.DashboardService;
 import com.pradeep.finance.dashboard.DashboardSummary;
 import com.pradeep.finance.dashboard.MerchantSpending;
@@ -39,6 +41,20 @@ public class FinanceToolsService {
     public List<MerchantSpending> merchantSpending(LocalDate from, LocalDate to) { return dashboardService.merchantSpending(from, to); }
     public List<RecurringTransaction> recurringActivity() { return recurringTransactionService.findRecurringTransactions(); }
 
+    /** Compact account snapshots give the model account IDs without sending the full account record. */
+    public List<AccountContext> accountOverview() {
+        return accountOverviewService.list().stream().map(this::accountContext).toList();
+    }
+
+    /** A bounded statement history for one account, selected only after the model has its account ID. */
+    public AccountHistoryContext accountHistory(String accountId) {
+        AccountHistoryResponse history = accountOverviewService.history(accountId);
+        List<AccountSnapshotContext> snapshots = history.snapshots().stream()
+                .skip(Math.max(0, history.snapshots().size() - 12L))
+                .map(this::snapshotContext).toList();
+        return new AccountHistoryContext(accountContext(history.account()), snapshots);
+    }
+
     public PeriodComparison comparePeriods(LocalDate from, LocalDate to, LocalDate compareFrom, LocalDate compareTo) {
         return new PeriodComparison(new Period(from, to, dashboardService.summary(from, to)), new Period(compareFrom, compareTo, dashboardService.summary(compareFrom, compareTo)));
     }
@@ -65,6 +81,15 @@ public class FinanceToolsService {
 
     private BigDecimal nonNegative(BigDecimal value) { return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO); }
     private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) { return denominator.signum() <= 0 ? null : numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 1, RoundingMode.HALF_UP); }
+    private AccountContext accountContext(AccountOverviewResponse account) {
+        return new AccountContext(account.id(), account.name(), account.institution(), account.accountType(), account.lastFour(),
+                account.statementBalance(), account.creditLimit(), account.availableCredit(), account.creditUtilizationPercent(),
+                account.currentApr(), account.promotionalApr(), account.promotionalAprExpiresOn(), account.minimumPayment(),
+                account.paymentDueDate(), account.nextExpectedStatementDate(), account.cycleEndDate());
+    }
+    private AccountSnapshotContext snapshotContext(StatementSnapshot snapshot) {
+        return new AccountSnapshotContext(snapshot.cycleEndDate(), snapshot.endingBalance(), snapshot.creditLimit(), snapshot.availableCredit(), snapshot.totalCredits(), snapshot.totalDebits());
+    }
 
     public record Period(LocalDate from, LocalDate to, DashboardSummary summary) {}
     public record PeriodComparison(Period selectedPeriod, Period comparisonPeriod) {}
@@ -72,4 +97,11 @@ public class FinanceToolsService {
                                     BigDecimal previousUtilizationPercent, int cardCount, int cardsWithPreviousSnapshot, List<CardUtilization> cards) {}
     public record CardUtilization(String accountName, String lastFour, BigDecimal statementBalance, BigDecimal creditLimit,
                                   BigDecimal availableCredit, BigDecimal utilizationPercent, BigDecimal previousUtilizationPercent) {}
+    public record AccountContext(String id, String name, String institution, AccountType accountType, String lastFour,
+                                 BigDecimal statementBalance, BigDecimal creditLimit, BigDecimal availableCredit, BigDecimal creditUtilizationPercent,
+                                 BigDecimal currentApr, BigDecimal promotionalApr, String promotionalAprExpiresOn, BigDecimal minimumPayment,
+                                 LocalDate paymentDueDate, LocalDate nextExpectedStatementDate, LocalDate statementAsOf) {}
+    public record AccountSnapshotContext(LocalDate statementAsOf, BigDecimal balance, BigDecimal creditLimit,
+                                         BigDecimal availableCredit, BigDecimal totalCredits, BigDecimal totalDebits) {}
+    public record AccountHistoryContext(AccountContext account, List<AccountSnapshotContext> statements) {}
 }

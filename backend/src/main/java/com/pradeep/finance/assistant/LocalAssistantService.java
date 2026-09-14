@@ -203,6 +203,8 @@ public class LocalAssistantService {
             case "get_merchant_spending" -> financeTools.merchantSpending(date(args, "from"), date(args, "to"));
             case "get_credit_utilization" -> financeTools.creditUtilization();
             case "get_recurring_activity" -> financeTools.recurringActivity();
+            case "get_account_overview" -> financeTools.accountOverview();
+            case "get_account_history" -> financeTools.accountHistory(requiredText(args, "accountId"));
             case "compare_periods" -> financeTools.comparePeriods(requiredDate(args, "from"), requiredDate(args, "to"), requiredDate(args, "compareFrom"), requiredDate(args, "compareTo"));
             case "search_transactions" -> financeTools.searchTransactions(text(args, "accountId"), date(args, "from"), date(args, "to"), text(args, "category"), text(args, "merchant"));
             default -> throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action. Try again, or reload the model in LM Studio.");
@@ -215,6 +217,8 @@ public class LocalAssistantService {
                 tool("get_merchant_spending", "Get the top merchants and spending for a date range.", dates()),
                 tool("get_credit_utilization", "Get current combined credit limit, utilization, availability, and prior-statement comparison.", empty()),
                 tool("get_recurring_activity", "Get confirmed recurring monthly activity detected from saved transaction history.", empty()),
+                tool("get_account_overview", "List compact current snapshots for every saved account, including account IDs, balances, card limits, utilization, APR, due dates, and statement dates.", empty()),
+                tool("get_account_history", "Get up to 12 statement snapshots for one account. Call get_account_overview first when an account ID is needed.", Map.of("type", "object", "properties", Map.of("accountId", stringProperty()), "required", List.of("accountId"))),
                 tool("compare_periods", "Compare two explicit date ranges for income, expenses, remittance, cash flow, and category totals.", Map.of("type", "object", "properties", Map.of("from", dateProperty(), "to", dateProperty(), "compareFrom", dateProperty(), "compareTo", dateProperty()), "required", List.of("from", "to", "compareFrom", "compareTo"))),
                 tool("search_transactions", "Find confirmed transactions by optional date range, account, category, or merchant.", Map.of("type", "object", "properties", Map.of("accountId", stringProperty(), "from", dateProperty(), "to", dateProperty(), "category", stringProperty(), "merchant", stringProperty()))));
     }
@@ -238,4 +242,5 @@ public class LocalAssistantService {
     private LocalDate date(JsonNode args, String field) { String value = text(args, field); return value == null ? null : LocalDate.parse(value); }
     private LocalDate requiredDate(JsonNode args, String field) { LocalDate value = date(args, field); if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + "."); return value; }
     private String text(JsonNode args, String field) { String value = args.path(field).asText("").trim(); return value.isBlank() ? null : value; }
+    private String requiredText(JsonNode args, String field) { String value = text(args, field); if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + "."); return value; }
 }

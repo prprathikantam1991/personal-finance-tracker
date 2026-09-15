@@ -48,7 +48,9 @@ public class BankOfAmericaPdfParser implements StatementTransactionParser {
                 pending.extractTrailingAmount();
             } else if (pending != null && AMOUNT_ONLY.matcher(line).matches()) {
                 pending.amount = parseAmount(line);
-            } else if (pending != null && !isStatementFooter(line)) {
+            } else if (pending != null && isStatementFooter(line)) {
+                pending.stopCollectingDescription();
+            } else if (pending != null && !pending.isDiscardingDescription()) {
                 pending.description.append(' ').append(line);
                 pending.extractTrailingAmount();
             }
@@ -72,6 +74,20 @@ public class BankOfAmericaPdfParser implements StatementTransactionParser {
                 || line.startsWith("Share these tips")
                 || line.startsWith("When you use the QRC")
                 || line.startsWith("Scan this")
+                || line.startsWith("Help prevent check fraud")
+                || line.startsWith("Consider writing fewer checks")
+                || line.startsWith("Instead, pay bills")
+                || line.startsWith("You can also set up automatic payments")
+                || line.startsWith("Scan the code to learn more")
+                || line.startsWith("NEW: BankAmeriDeals")
+                || line.startsWith("Find more cash back deals")
+                || line.startsWith("Check it out today")
+                || line.startsWith("Explore your deals")
+                || line.startsWith("Take your security to the next level")
+                || line.startsWith("Check your security meter")
+                || line.startsWith("To learn more, visit")
+                || line.startsWith("Mobile Banking requires")
+                || line.startsWith("requires that you download the Mobile Banking app")
                 || line.startsWith("Braille")
                 || line.startsWith("PRADEEP RAJU")
                 || line.startsWith("Account #");
@@ -82,7 +98,10 @@ public class BankOfAmericaPdfParser implements StatementTransactionParser {
         private final LocalDate date;
         private final StringBuilder description;
         private BigDecimal amount;
+        private boolean discardingDescription;
         private PendingTransaction(LocalDate date, String description) { this.date = date; this.description = new StringBuilder(description); }
         private void extractTrailingAmount() { Matcher match = AMOUNT_AT_END.matcher(description); if (match.find()) { amount = new BigDecimal(match.group(1).replace("$", "").replace(",", "")); description.delete(match.start(), description.length()); } }
+        private void stopCollectingDescription() { discardingDescription = true; }
+        private boolean isDiscardingDescription() { return discardingDescription; }
     }
 }

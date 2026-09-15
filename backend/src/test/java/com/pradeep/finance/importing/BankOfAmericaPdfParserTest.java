@@ -33,4 +33,27 @@ class BankOfAmericaPdfParserTest {
         assertThat(transactions.get(1).description()).isEqualTo("Long description that continues across a line");
         assertThat(transactions.get(1).amount()).isEqualByComparingTo(new BigDecimal("-42.15"));
     }
+
+    @Test
+    void stopsCollectingDescriptionAfterMarketingFooterBegins() {
+        String statement = """
+                Bank of America
+                Deposits and other additions
+                Date Description Amount
+                Withdrawals and other subtractions
+                Date Description Amount
+                01/05/26 Mobile Banking payment to CRD 7098 Confirmation# 3znvdnno8 -500.00
+                Help prevent check fraud Consider writing fewer checks.
+                Instead, pay bills using our Mobile app or Online Banking.
+                Mobile Banking requires that you download the Mobile Banking app.
+                Total withdrawals and other subtractions -$500.00
+                """;
+
+        List<ParsedTransaction> transactions = parser.parse(statement);
+
+        assertThat(transactions).singleElement().satisfies(transaction -> {
+            assertThat(transaction.description()).isEqualTo("Mobile Banking payment to CRD 7098 Confirmation# 3znvdnno8");
+            assertThat(transaction.amount()).isEqualByComparingTo("-500.00");
+        });
+    }
 }

@@ -14,6 +14,11 @@ public class MerchantNormalizer {
                 .replaceAll("\\b\\d{4,}\\b", " ")
                 .replaceAll("\\b(?:MERCHANDISE|WEB|ONLINE)\\b", " ")
                 .replaceAll("[^A-Z ]", " ").replaceAll("\\s+", " ").trim();
+        // Transfers and payments can contain unrelated brands in statement boilerplate.
+        // Classify their financial meaning before applying merchant aliases.
+        if (value.contains("ZELLE PAYMENT")) return "Zelle Transfer";
+        if (value.contains("PAYMENT TO CRD") || value.contains("BANK OF AMERICA PAYMENT")) return "Card Payment";
+        if (value.contains("PSEG") || value.contains("PUBLIC SERVICE DES")) return "PSEG";
         if (value.contains("PATEL BROTHERS")) return "Patel Brothers";
         if (value.contains("ASIAN HALAL MEAT")) return "Asian Halal Meat";
         if (value.contains("WALMART")) return "Walmart";

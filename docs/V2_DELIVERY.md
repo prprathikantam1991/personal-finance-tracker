@@ -20,4 +20,4 @@ Dashboard and reporting calculations use confirmed transactions. Transfers are e
 
 ## Quality follow-up
 
-Dashboard period alignment and merchant drill-down are tracked separately in GitHub Issue #14. This does not change the completed V2 foundation; it improves the experience around its existing data.
+Dashboard period alignment and merchant drill-down are tracked separately in GitHub Issue #14. Bank of America imports also stop before statement marketing/footer text, and repair historical card-payment, Zelle, and PSEG classifications in Issue #15. These do not change the completed V2 foundation; they improve the quality of its existing data.

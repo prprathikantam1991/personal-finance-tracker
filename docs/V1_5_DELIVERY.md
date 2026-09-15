@@ -21,6 +21,12 @@ Automation proposes or applies repeatable decisions. It never invents a transact
 
 Saved category rules apply to future normalized merchant descriptions. Transfer grouping marks both sides of an internal movement so expenses and cash flow do not count the same money twice.
 
+## How it is built
+
+Account identity is derived from institution, account type, and last four digits. The import service matches that identity to an existing SQLite account or creates it when it is confidently new. Each import also stores a source-file hash, while transaction duplicate checks compare the account, date, normalized description, and amount. The categorizer first applies a remembered merchant rule, then deterministic finance rules; uncertain rows stay reviewable. A transfer detector links compatible debit and credit rows after import, preserving both ledger entries but excluding the movement from spending calculations. The watched-folder scheduler reuses the same import service, rather than maintaining a second ingestion path.
+
+See [System Architecture](ARCHITECTURE.md), [request flows](REQUEST_FLOWS.md), and [design decisions](DESIGN_DECISIONS.md).
+
 ## Verification
 
 Imports are idempotent for repeated source files, and parser/category/transfer behavior is covered by backend tests plus review against local statements.

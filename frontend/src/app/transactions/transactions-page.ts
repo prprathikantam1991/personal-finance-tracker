@@ -28,6 +28,7 @@ export class TransactionsPage implements OnInit {
   protected readonly selectedConfidence = signal('');
   protected readonly categoryMessage = signal('');
   protected readonly editingCategoryId = signal<string | null>(null);
+  protected readonly selectedTransactionIds = signal<Set<string>>(new Set());
   protected readonly categoryOptions = ['Auto & Transport', 'Fitness', 'Food & Drinks', 'Gas & Fuel', 'Groceries', 'India Remittance', 'Income', 'Investments', 'Rent', 'Restaurants', 'Shopping', 'Transfer', 'Travel', 'Uncategorized', 'Utilities'];
 
   ngOnInit(): void {
@@ -43,7 +44,7 @@ export class TransactionsPage implements OnInit {
     this.loading.set(true);
     this.loadError.set(false);
     this.transactionsApi.list(this.selectedAccountId(), this.fromDate(), this.toDate()).subscribe({
-      next: (transactions) => { this.transactions.set(transactions); this.loading.set(false); },
+      next: (transactions) => { this.transactions.set(transactions); this.selectedTransactionIds.set(new Set()); this.loading.set(false); },
       error: () => { this.loadError.set(true); this.loading.set(false); },
     });
   }
@@ -65,6 +66,34 @@ export class TransactionsPage implements OnInit {
   }
   protected editCategory(transactionId: string): void { this.editingCategoryId.set(transactionId); this.categoryMessage.set(''); }
   protected cancelCategoryEdit(): void { this.editingCategoryId.set(null); }
+  protected isBulkEligible(transaction: FinanceTransaction): boolean { return !transaction.transferGroupId && transaction.category !== 'Transfer'; }
+  protected toggleTransaction(transactionId: string, event: Event): void {
+    const selected = new Set(this.selectedTransactionIds());
+    if ((event.target as HTMLInputElement).checked) selected.add(transactionId); else selected.delete(transactionId);
+    this.selectedTransactionIds.set(selected);
+  }
+  protected toggleAllVisible(event: Event): void {
+    const selected = new Set(this.selectedTransactionIds());
+    const eligible = this.visibleTransactions().filter(transaction => this.isBulkEligible(transaction));
+    if ((event.target as HTMLInputElement).checked) eligible.forEach(transaction => selected.add(transaction.id)); else eligible.forEach(transaction => selected.delete(transaction.id));
+    this.selectedTransactionIds.set(selected);
+  }
+  protected selectedCount(): number { return this.visibleTransactions().filter(transaction => this.selectedTransactionIds().has(transaction.id) && this.isBulkEligible(transaction)).length; }
+  protected hasBulkEligibleTransactions(): boolean { return this.visibleTransactions().some(transaction => this.isBulkEligible(transaction)); }
+  protected allEligibleVisibleSelected(): boolean { const eligible = this.visibleTransactions().filter(transaction => this.isBulkEligible(transaction)); return eligible.length > 0 && eligible.every(transaction => this.selectedTransactionIds().has(transaction.id)); }
+  protected saveBulkCategory(category: string, rememberForFuture: boolean): void {
+    const ids = this.visibleTransactions().filter(transaction => this.selectedTransactionIds().has(transaction.id) && this.isBulkEligible(transaction)).map(transaction => transaction.id);
+    if (!ids.length) return;
+    this.categoryMessage.set('');
+    this.transactionsApi.updateCategories(ids, category, rememberForFuture).subscribe({
+      next: result => {
+        const updates = new Map(result.updatedTransactions.map(transaction => [transaction.id, transaction]));
+        this.transactions.update(items => items.map(transaction => updates.get(transaction.id) ?? transaction));
+        this.selectedTransactionIds.set(new Set());
+        this.categoryMessage.set(`Updated ${result.updatedTransactions.length} transaction${result.updatedTransactions.length === 1 ? '' : 's'} to ${category}.${result.skippedTransfers ? ` ${result.skippedTransfers} transfer${result.skippedTransfers === 1 ? '' : 's'} skipped.` : ''}`);
+      }, error: () => this.categoryMessage.set('Could not update the selected transactions. Please try again.'),
+    });
+  }
   protected visibleTransactions(): FinanceTransaction[] {
     const search = this.search();
     return this.transactions().filter((transaction) => (!search || `${transaction.merchantName} ${transaction.description} ${transaction.accountName ?? ''}`.toLowerCase().includes(search)) && (!this.selectedCategory() || transaction.category === this.selectedCategory()) && (!this.selectedConfidence() || transaction.categorizationConfidence === this.selectedConfidence()));

@@ -28,6 +28,7 @@ export class DashboardPage implements OnInit {
     }
     this.month.set('');
     if (preset === 'last-3-months') this.from.set(this.isoDate(new Date(today.getFullYear(), today.getMonth() - 2, 1)));
+    if (preset === 'last-6-months') this.from.set(this.isoDate(new Date(today.getFullYear(), today.getMonth() - 5, 1)));
     if (preset === 'year-to-date') this.from.set(`${today.getFullYear()}-01-01`);
     this.to.set(this.isoDate(today)); this.load();
   }

@@ -2,6 +2,7 @@ package com.pradeep.finance.transaction;
 
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 
 import com.pradeep.finance.account.AccountType;
@@ -66,6 +67,28 @@ public class TransactionService {
         if (description == null) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Transaction not found.");
         jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ?", request.category().trim(), transactionId);
         if (request.rememberForFuture()) categoryRuleService.remember(description, request.category().trim());
+        return transactionResponse(transactionId);
+    }
+
+    @Transactional
+    public BulkCategoryUpdateResponse updateCategories(BulkCategoryUpdateRequest request) {
+        List<String> ids = new ArrayList<>(new LinkedHashSet<>(request.transactionIds()));
+        String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
+        List<String> eligibleIds = jdbcTemplate.query("""
+                SELECT id FROM transactions
+                WHERE id IN (""" + placeholders + ") AND transfer_group_id IS NULL AND category <> 'Transfer'", (rs, row) -> rs.getString(1), ids.toArray());
+        String category = request.category().trim();
+        for (String id : eligibleIds) {
+            jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ?", category, id);
+            if (request.rememberForFuture()) {
+                String description = jdbcTemplate.query("SELECT description FROM transactions WHERE id = ?", rs -> rs.next() ? rs.getString(1) : null, id);
+                if (description != null) categoryRuleService.remember(description, category);
+            }
+        }
+        return new BulkCategoryUpdateResponse(eligibleIds.stream().map(this::transactionResponse).toList(), ids.size() - eligibleIds.size());
+    }
+
+    private TransactionResponse transactionResponse(String transactionId) {
         return jdbcTemplate.queryForObject("""
                 SELECT t.id, t.account_id, a.name AS account_name, a.account_type, t.transaction_date, t.description, t.amount, t.balance, t.category, t.transfer_group_id, t.status
                 FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ?

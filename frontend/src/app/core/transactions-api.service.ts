@@ -18,4 +18,8 @@ export class TransactionsApiService {
   updateCategory(transactionId: string, category: string, rememberForFuture: boolean) {
     return this.http.patch<FinanceTransaction>(`${this.apiUrl}/${transactionId}/category`, { category, rememberForFuture });
   }
+
+  updateCategories(transactionIds: string[], category: string, rememberForFuture: boolean) {
+    return this.http.patch<{ updatedTransactions: FinanceTransaction[]; skippedTransfers: number }>(`${this.apiUrl}/categories`, { transactionIds, category, rememberForFuture });
+  }
 }

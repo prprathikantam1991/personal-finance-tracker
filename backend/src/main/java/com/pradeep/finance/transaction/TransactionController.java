@@ -35,4 +35,9 @@ public class TransactionController {
     public TransactionResponse updateCategory(@PathVariable String transactionId, @Valid @RequestBody CategoryUpdateRequest request) {
         return transactionService.updateCategory(transactionId, request);
     }
+
+    @PatchMapping("/categories")
+    public BulkCategoryUpdateResponse updateCategories(@Valid @RequestBody BulkCategoryUpdateRequest request) {
+        return transactionService.updateCategories(request);
+    }
 }

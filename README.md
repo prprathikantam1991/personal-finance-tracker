@@ -90,5 +90,8 @@ cd frontend; npm run build
 - [Request flows](docs/REQUEST_FLOWS.md) — imports, automation, and assistant lifecycle.
 - [Design decisions](docs/DESIGN_DECISIONS.md) — why the stack and safety rules were selected.
 - [V1 implementation specification](docs/V1_IMPLEMENTATION_SPECIFICATION.md) — original product scope.
+- [V1 delivery](docs/V1_DELIVERY.md), [V1.5 delivery](docs/V1_5_DELIVERY.md), [V2 delivery](docs/V2_DELIVERY.md), and [V2.5 delivery](docs/V2_5_DELIVERY.md) — what each completed product layer delivered.
 - [AI Assistant Architecture](docs/AI_ASSISTANT_ARCHITECTURE.md) — detailed V3 tool-calling design.
+- [V3 delivery](docs/V3_DELIVERY.md) and [V4 agentic implementation plan](docs/V4_IMPLEMENTATION_PLAN.md) — local AI status and the planned controlled multi-step workflow.
+- [V5 production-polish plan](docs/V5_PRODUCTION_POLISH_PLAN.md) — optional future hardening.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

@@ -53,16 +53,17 @@ public class DashboardService {
                 .toList();
     }
     public List<MerchantSpending> merchantSpending(LocalDate from, LocalDate to) {
-        LocalDate end = to == null ? LocalDate.now() : to;
-        LocalDate start = from == null ? end.withDayOfMonth(1) : from;
-        long days = java.time.temporal.ChronoUnit.DAYS.between(start, end) + 1;
-        LocalDate previousEnd = start.minusDays(1);
-        LocalDate previousStart = previousEnd.minusDays(days - 1);
-        Map<String, MerchantTotal> current = merchantTotals(start, end);
-        Map<String, MerchantTotal> previous = merchantTotals(previousStart, previousEnd);
+        Map<String, MerchantTotal> current = merchantTotals(from, to);
+        Map<String, MerchantTotal> previous = Map.of();
+        if (from != null && to != null) {
+            long days = java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1;
+            LocalDate previousEnd = from.minusDays(1);
+            previous = merchantTotals(previousEnd.minusDays(days - 1), previousEnd);
+        }
+        Map<String, MerchantTotal> previousTotals = previous;
         return current.entrySet().stream().map(entry -> {
             MerchantTotal total = entry.getValue();
-            return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), previous.getOrDefault(entry.getKey(), MerchantTotal.empty()).amount());
+            return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), previousTotals.getOrDefault(entry.getKey(), MerchantTotal.empty()).amount());
         }).sorted(java.util.Comparator.comparing(MerchantSpending::amount).reversed()).limit(5).toList();
     }
     private Map<String, MerchantTotal> merchantTotals(LocalDate from, LocalDate to) {
@@ -71,7 +72,7 @@ public class DashboardService {
                 SELECT t.description, t.category, t.amount, a.account_type FROM transactions t
                 LEFT JOIN accounts a ON a.id = t.account_id
                 WHERE t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')
-                AND t.transaction_date >= ? AND t.transaction_date <= ?
+                AND (? IS NULL OR t.transaction_date >= ?) AND (? IS NULL OR t.transaction_date <= ?)
                 """, rs -> {
             String merchant = merchantNormalizer.normalize(rs.getString("description"));
             BigDecimal amount = rs.getBigDecimal("amount");
@@ -79,7 +80,7 @@ public class DashboardService {
             if (spend.signum() <= 0) return;
             MerchantTotal existing = totals.getOrDefault(merchant, MerchantTotal.empty());
             totals.put(merchant, new MerchantTotal(rs.getString("category"), existing.amount().add(spend), existing.count() + 1));
-        }, from.toString(), to.toString());
+        }, from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString());
         return totals;
     }
     private record MerchantTotal(String category, BigDecimal amount, int count) { static MerchantTotal empty() { return new MerchantTotal("", BigDecimal.ZERO, 0); } }

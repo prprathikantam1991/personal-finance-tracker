@@ -32,7 +32,7 @@ export class TransactionsPage implements OnInit {
 
   ngOnInit(): void {
     this.selectedCategory.set(this.route.snapshot.queryParamMap.get('category') ?? '');
-    this.search.set(this.route.snapshot.queryParamMap.get('merchant') ?? '');
+    this.search.set((this.route.snapshot.queryParamMap.get('merchant') ?? '').toLowerCase());
     this.fromDate.set(this.route.snapshot.queryParamMap.get('from') ?? '');
     this.toDate.set(this.route.snapshot.queryParamMap.get('to') ?? '');
     this.accountsApi.list().subscribe({ next: (accounts) => this.accounts.set(accounts) });

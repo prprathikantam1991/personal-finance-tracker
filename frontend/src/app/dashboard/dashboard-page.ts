@@ -9,19 +9,40 @@ interface MonthlyTrend { month: string; income: number; expenses: number; indiaR
 interface MerchantSpending { merchant: string; category: string; amount: number; transactionCount: number; previousAmount: number; }
 @Component({ selector: 'app-dashboard-page', imports: [CurrencyPipe, RouterLink], templateUrl: './dashboard-page.html', styleUrl: './dashboard-page.scss' })
 export class DashboardPage implements OnInit {
-  private readonly http = inject(HttpClient); protected readonly summary = signal<Summary | null>(null); protected readonly previousSummary = signal<Summary | null>(null); protected readonly trends = signal<MonthlyTrend[]>([]); protected readonly merchants = signal<MerchantSpending[]>([]); protected readonly selectedTrend = signal<MonthlyTrend | null>(null); protected readonly trendMonths = signal(6); protected readonly error = signal(false); protected readonly from = signal(''); protected readonly to = signal(''); protected readonly month = signal('');
+  private readonly http = inject(HttpClient); protected readonly summary = signal<Summary | null>(null); protected readonly previousSummary = signal<Summary | null>(null); protected readonly trends = signal<MonthlyTrend[]>([]); protected readonly merchants = signal<MerchantSpending[]>([]); protected readonly selectedTrend = signal<MonthlyTrend | null>(null); protected readonly trendMonths = signal(6); protected readonly error = signal(false); protected readonly from = signal(''); protected readonly to = signal(''); protected readonly month = signal(''); protected readonly selectedPreset = signal('previous-month');
   protected merchantChange(item: MerchantSpending): number { return item.amount - item.previousAmount; }
   protected change(current: number, previous: number): number { return current - previous; }
-  ngOnInit(): void { const previous = new Date(); previous.setMonth(previous.getMonth() - 1); const month = `${previous.getFullYear()}-${String(previous.getMonth() + 1).padStart(2, '0')}`; this.month.set(month); this.applyMonth(month); }
-  protected updateFrom(event: Event): void { this.from.set((event.target as HTMLInputElement).value); this.month.set(''); this.load(); }
-  protected updateTo(event: Event): void { this.to.set((event.target as HTMLInputElement).value); this.month.set(''); this.load(); }
-  protected clearFilters(): void { this.month.set(''); this.from.set(''); this.to.set(''); this.selectedTrend.set(null); this.load(false); }
-  protected updateMonth(event: Event): void { const value = (event.target as HTMLInputElement).value; this.month.set(value); if (value) this.applyMonth(value); }
+  ngOnInit(): void { this.applyPreset('previous-month'); }
+  protected updateFrom(event: Event): void { this.from.set((event.target as HTMLInputElement).value); this.month.set(''); this.selectedPreset.set('custom'); this.load(); }
+  protected updateTo(event: Event): void { this.to.set((event.target as HTMLInputElement).value); this.month.set(''); this.selectedPreset.set('custom'); this.load(); }
+  protected clearFilters(): void { this.applyPreset('all-history'); }
+  protected updateMonth(event: Event): void { const value = (event.target as HTMLInputElement).value; this.month.set(value); this.selectedPreset.set('custom'); if (value) this.applyMonth(value); }
+  protected applyPreset(preset: string): void {
+    const today = new Date();
+    this.selectedPreset.set(preset); this.selectedTrend.set(null);
+    if (preset === 'all-history') { this.month.set(''); this.from.set(''); this.to.set(''); this.load(false); return; }
+    if (preset === 'previous-month' || preset === 'current-month') {
+      const date = new Date(today.getFullYear(), today.getMonth() + (preset === 'previous-month' ? -1 : 0), 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      this.month.set(value); this.applyMonth(value); return;
+    }
+    this.month.set('');
+    if (preset === 'last-3-months') this.from.set(this.isoDate(new Date(today.getFullYear(), today.getMonth() - 2, 1)));
+    if (preset === 'year-to-date') this.from.set(`${today.getFullYear()}-01-01`);
+    this.to.set(this.isoDate(today)); this.load();
+  }
+  protected periodLabel(): string {
+    if (!this.from() && !this.to()) return 'All confirmed history';
+    const format = (value: string) => new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(`${value}T12:00:00`));
+    if (this.from() && this.to()) return `${format(this.from())} – ${format(this.to())}`;
+    return this.from() ? `From ${format(this.from())}` : `Through ${format(this.to())}`;
+  }
   private applyMonth(value: string): void { const [year, month] = value.split('-').map(Number); this.from.set(`${value}-01`); this.to.set(new Date(year, month, 0).toISOString().slice(0, 10)); this.load(); }
   protected trendHeight(value: number): number { const largest = Math.max(...this.trends().flatMap(trend => [trend.income, trend.expenses, trend.indiaRemittance, trend.netCashFlow]), 1); return Math.max(5, Math.round((Math.abs(value) / largest) * 100)); }
   protected monthLabel(value: string): string { const [year, month] = value.split('-').map(Number); return new Intl.DateTimeFormat('en-US', { month: 'short', year: '2-digit' }).format(new Date(year, month - 1, 1)); }
   protected selectTrend(trend: MonthlyTrend): void {
     this.selectedTrend.set(trend);
+    this.selectedPreset.set('custom');
     this.month.set(trend.month);
     const [year, month] = trend.month.split('-').map(Number);
     this.from.set(`${trend.month}-01`);

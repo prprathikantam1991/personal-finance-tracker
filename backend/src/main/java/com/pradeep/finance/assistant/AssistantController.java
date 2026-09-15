@@ -12,4 +12,5 @@ public class AssistantController {
     private final LocalAssistantService localAssistantService;
     public AssistantController(LocalAssistantService localAssistantService) { this.localAssistantService = localAssistantService; }
     @PostMapping("/chat") public AssistantChatResponse chat(@Valid @RequestBody AssistantChatRequest request) { return localAssistantService.chat(request.message(), request.conversation()); }
+    @PostMapping("/agent-runs") public AgentRunResponse agentRun(@Valid @RequestBody AgentRunRequest request) { return localAssistantService.agentRun(request.message(), request.conversation()); }
 }

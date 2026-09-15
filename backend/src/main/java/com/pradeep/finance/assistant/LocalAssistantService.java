@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -67,6 +68,56 @@ public class LocalAssistantService {
             return directAnswer(question, safeConversation)
                     .orElseThrow(() -> exception);
         }
+    }
+
+    /**
+     * V4's bounded multi-step loop. One tool is permitted per model round so each
+     * financial lookup is validated and recorded before the next decision is made.
+     */
+    public AgentRunResponse agentRun(String question, List<AssistantConversationMessage> conversation) {
+        List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
+        DateRange resolvedRange = resolveRange(question, safeConversation);
+        String resolvedMerchant = resolveMerchant(question, safeConversation);
+        List<Map<String, Object>> messages = new ArrayList<>();
+        messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)
+                + " For an agent run, request at most one finance tool at a time. After each tool result, decide whether another allowed tool is needed or answer."));
+        safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
+        messages.add(message("user", question.trim()));
+
+        List<String> toolsUsed = new ArrayList<>();
+        List<AgentStep> steps = new ArrayList<>();
+        for (int round = 1; round <= 3; round++) {
+            JsonNode modelResponse = complete(messages, true);
+            JsonNode assistantMessage = modelResponse.path("choices").path(0).path("message");
+            List<JsonNode> calls = new ArrayList<>();
+            assistantMessage.path("tool_calls").forEach(calls::add);
+            if (calls.isEmpty()) return new AgentRunResponse(content(assistantMessage), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+            if (calls.size() != 1) return agentStopped("The local model requested more than one tool at once. Please try the question again.", toolsUsed, steps, resolvedRange, "MULTIPLE_TOOLS_REQUESTED");
+
+            JsonNode call = calls.getFirst();
+            String name = call.path("function").path("name").asText();
+            try {
+                JsonNode arguments = parseArguments(call.path("function").path("arguments").asText("{}"));
+                validateAgentCall(name, arguments);
+                Object result = execute(name, arguments);
+                String resultJson = json(result);
+                if (resultJson.length() > 24_000) return agentStopped("The requested finance result was too large to use safely. Please narrow the question.", toolsUsed, steps, resolvedRange, "RESULT_TOO_LARGE");
+                toolsUsed.add(name);
+                steps.add(new AgentStep(round, name, "Completed"));
+                messages.add(objectMapper.convertValue(assistantMessage, Map.class));
+                messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", resultJson));
+            } catch (ResponseStatusException exception) {
+                steps.add(new AgentStep(round, name.isBlank() ? "unknown" : name, "Rejected"));
+                return agentStopped(exception.getReason(), toolsUsed, steps, resolvedRange, "VALIDATION_STOP");
+            }
+        }
+        JsonNode finalResponse = complete(messages, false);
+        return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "TOOL_BUDGET_REACHED", model, evidence(resolvedRange, toolsUsed));
+    }
+
+    private AgentRunResponse agentStopped(String answer, List<String> tools, List<AgentStep> steps, DateRange range, String stopReason) {
+        return new AgentRunResponse(answer == null || answer.isBlank() ? "The agent run stopped safely before producing an answer." : answer,
+                List.copyOf(tools), List.copyOf(steps), stopReason, model, evidence(range, tools));
     }
 
     private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange) {
@@ -209,6 +260,39 @@ public class LocalAssistantService {
             case "search_transactions" -> financeTools.searchTransactions(text(args, "accountId"), date(args, "from"), date(args, "to"), text(args, "category"), text(args, "merchant"));
             default -> throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action. Try again, or reload the model in LM Studio.");
         };
+    }
+
+    private void validateAgentCall(String name, JsonNode args) {
+        Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "search_transactions");
+        if (!tools.contains(name)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action.");
+        if (!args.isObject()) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied invalid tool arguments.");
+        Set<String> allowedFields = switch (name) {
+            case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
+            case "get_account_history" -> Set.of("accountId");
+            case "compare_periods" -> Set.of("from", "to", "compareFrom", "compareTo");
+            case "search_transactions" -> Set.of("accountId", "from", "to", "category", "merchant");
+            default -> Set.of();
+        };
+        args.fieldNames().forEachRemaining(field -> {
+            if (!allowedFields.contains(field)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied an unsupported tool argument.");
+        });
+        validateAgentDates(args, "from", "to");
+        validateAgentDates(args, "compareFrom", "compareTo");
+    }
+
+    private void validateAgentDates(JsonNode args, String fromField, String toField) {
+        LocalDate from = agentDate(args, fromField);
+        LocalDate to = agentDate(args, toField);
+        if (from != null && to != null && (to.isBefore(from) || java.time.temporal.ChronoUnit.DAYS.between(from, to) > 731)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant date range must be between zero and 731 days.");
+        }
+    }
+
+    private LocalDate agentDate(JsonNode args, String field) {
+        String value = text(args, field);
+        if (value == null) return null;
+        try { return LocalDate.parse(value); }
+        catch (java.time.format.DateTimeParseException exception) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant dates must use YYYY-MM-DD."); }
     }
 
     private List<Map<String, Object>> toolDefinitions() {

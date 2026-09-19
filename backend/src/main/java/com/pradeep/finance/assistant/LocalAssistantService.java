@@ -34,15 +34,18 @@ public class LocalAssistantService {
     private final LocalModelClient localModelClient;
     private final String model;
     private final int finalAnswerMaxTokens;
+    private final int toolSelectionMaxTokens;
 
     public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper, LocalModelClient localModelClient,
                                  @Value("${finance.assistant.model}") String model,
-                                 @Value("${finance.assistant.final-answer-max-tokens:1200}") int finalAnswerMaxTokens) {
+                                 @Value("${finance.assistant.final-answer-max-tokens:1200}") int finalAnswerMaxTokens,
+                                 @Value("${finance.assistant.tool-selection-max-tokens:160}") int toolSelectionMaxTokens) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
         this.localModelClient = localModelClient;
         this.model = model;
         this.finalAnswerMaxTokens = Math.max(500, finalAnswerMaxTokens);
+        this.toolSelectionMaxTokens = Math.max(160, toolSelectionMaxTokens);
     }
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
@@ -83,7 +86,7 @@ public class LocalAssistantService {
         List<AgentStep> steps = new ArrayList<>();
         Set<String> completedCalls = new java.util.HashSet<>();
         for (int round = 1; round <= 3; round++) {
-            JsonNode modelResponse = complete(messages, true, 160);
+            JsonNode modelResponse = complete(messages, true, toolSelectionMaxTokens);
             JsonNode assistantMessage = modelResponse.path("choices").path(0).path("message");
             List<JsonNode> calls = new ArrayList<>();
             assistantMessage.path("tool_calls").forEach(calls::add);
@@ -141,7 +144,7 @@ public class LocalAssistantService {
     }
 
     private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange) {
-        JsonNode first = complete(messages, true, 160);
+        JsonNode first = complete(messages, true, toolSelectionMaxTokens);
         JsonNode assistantMessage = first.path("choices").path(0).path("message");
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);

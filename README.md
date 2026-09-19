@@ -98,7 +98,7 @@ The Runtime/Converse adapter uses the standard AWS credential chain; it does not
 
 To evaluate Google Gemma 4 E2B through Mantle, set `FINANCE_ASSISTANT_MODEL=google.gemma-4-e2b`. The optional `BEDROCK_REASONING_EFFORT=high` setting is passed through only to Mantle requests and is recommended by AWS for this model.
 
-The assistant reserves `1200` output tokens for its final explanation by default so reasoning-capable models can complete multi-part answers. Override this locally with `FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS` when evaluating response length, latency, and cost.
+The assistant reserves `1200` output tokens for its final explanation by default so reasoning-capable models can complete multi-part answers. Override this locally with `FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS` when evaluating response length, latency, and cost. Tool-selection turns default to `160` tokens; when evaluating Gemma 4 E2B with high reasoning effort, use `FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS=600` so it has enough room to reason and return a function call.
 
 ## Verify changes
 

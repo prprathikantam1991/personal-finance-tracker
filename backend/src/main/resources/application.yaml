@@ -31,6 +31,7 @@ finance:
     provider: ${FINANCE_ASSISTANT_PROVIDER:lm-studio}
     model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
     final-answer-max-tokens: ${FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS:1200}
+    tool-selection-max-tokens: ${FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS:160}
     lm-studio:
       base-url: ${LM_STUDIO_BASE_URL:http://localhost:1234/v1}
       api-key: ${LM_STUDIO_API_KEY:}

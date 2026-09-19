@@ -88,12 +88,12 @@ class AgentRunEvaluationTest {
         when(financeTools.comparePeriods(any(), any(), any(), any())).thenReturn(null);
         when(financeTools.merchantSpending(any(), any())).thenReturn(List.of());
 
-        AgentRunResponse result = service.agentRun("Compare July and August 2026, then show August merchants.", List.of());
+        AgentRunResponse result = service.agentRun("Compare July and August 2026, then show top merchants for August.", List.of());
 
         assertThat(result.stopReason()).isEqualTo("COMPLETED");
         assertThat(result.toolsUsed()).containsExactly("compare_periods", "get_merchant_spending");
         assertThat(result.steps()).hasSize(2);
-        verify(financeTools).merchantSpending(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 8, 31));
+        verify(financeTools).merchantSpending(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31));
     }
 
     @Test

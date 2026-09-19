@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class LocalAssistantService {
     private static final Pattern MONTH_NAME = Pattern.compile("(?i)\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private static final Pattern MERCHANT = Pattern.compile("(?i)\\bat\\s+(.+?)(?=\\s+(?:for|in|during)\\b|[?!.]?$)");
+    private static final Pattern MERCHANT_PERIOD = Pattern.compile("(?i)\\bmerchants?\\b[^?!.]{0,80}?\\b(?:for|in|during)\\s+(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private final FinanceToolsService financeTools;
     private final ObjectMapper objectMapper;
     private final LocalModelClient localModelClient;
@@ -106,7 +107,7 @@ public class LocalAssistantService {
                     JsonNode finalResponse = complete(messages, false, 500);
                     return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
-                JsonNode arguments = normalizeArguments(name, suppliedArguments, resolvedRange);
+                JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange));
                 validateAgentCall(name, arguments);
                 if (!completedCalls.add(name + ":" + json(arguments))) {
                     JsonNode finalResponse = complete(messages, false, 500);
@@ -293,6 +294,17 @@ public class LocalAssistantService {
 
     private boolean usesDateRange(String name) {
         return Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "search_transactions").contains(name);
+    }
+
+    /** A multi-part question can compare two months but ask merchant detail for just one of them. */
+    private DateRange rangeForTool(String name, String question, DateRange fallback) {
+        if (!"get_merchant_spending".equals(name)) return fallback;
+        Matcher matcher = MERCHANT_PERIOD.matcher(question);
+        String month = null;
+        while (matcher.find()) month = matcher.group(1);
+        if (month == null) return fallback;
+        YearMonth target = YearMonth.of(LocalDate.now().getYear(), monthNumber(month));
+        return new DateRange(target.atDay(1), target.atEndOfMonth());
     }
 
     private boolean isUndatedRepeat(String name, JsonNode suppliedArguments, List<String> toolsUsed) {

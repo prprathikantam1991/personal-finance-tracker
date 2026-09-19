@@ -13,7 +13,10 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -24,6 +27,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 @Component
 @ConditionalOnProperty(name = "finance.assistant.provider", havingValue = "bedrock-mantle")
 public class BedrockMantleOpenAiClient implements LocalModelClient {
+    private static final Logger log = LoggerFactory.getLogger(BedrockMantleOpenAiClient.class);
     private final RestClient restClient;
     private final String model;
 
@@ -62,6 +66,12 @@ public class BedrockMantleOpenAiClient implements LocalModelClient {
         } catch (ResourceAccessException exception) {
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "Amazon Bedrock Mantle is not reachable. Check the region, Bedrock API key, and model access.", exception);
+        } catch (RestClientResponseException exception) {
+            String responseBody = exception.getResponseBodyAsString();
+            log.warn("Bedrock Mantle rejected the request with HTTP {}: {}", exception.getStatusCode().value(), responseBody);
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
+                    "Amazon Bedrock Mantle rejected this request with HTTP " + exception.getStatusCode().value()
+                            + ". Check the server log for the provider response.", exception);
         } catch (Exception exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                     "Amazon Bedrock Mantle rejected this request. Check the Bedrock API key and selected model.", exception);

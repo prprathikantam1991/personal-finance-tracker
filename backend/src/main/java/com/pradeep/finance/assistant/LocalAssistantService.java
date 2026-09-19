@@ -33,13 +33,16 @@ public class LocalAssistantService {
     private final ObjectMapper objectMapper;
     private final LocalModelClient localModelClient;
     private final String model;
+    private final int finalAnswerMaxTokens;
 
     public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper, LocalModelClient localModelClient,
-                                 @Value("${finance.assistant.model}") String model) {
+                                 @Value("${finance.assistant.model}") String model,
+                                 @Value("${finance.assistant.final-answer-max-tokens:1200}") int finalAnswerMaxTokens) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
         this.localModelClient = localModelClient;
         this.model = model;
+        this.finalAnswerMaxTokens = Math.max(500, finalAnswerMaxTokens);
     }
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
@@ -107,13 +110,13 @@ public class LocalAssistantService {
             try {
                 JsonNode suppliedArguments = parseArguments(call.path("function").path("arguments").asText("{}"));
                 if (isUndatedRepeat(name, suppliedArguments, toolsUsed)) {
-                    JsonNode finalResponse = complete(messages, false, 500);
+                    JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
                     return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
                 JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange));
                 validateAgentCall(name, arguments);
                 if (!completedCalls.add(name + ":" + json(arguments))) {
-                    JsonNode finalResponse = complete(messages, false, 500);
+                    JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
                     return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
                 Object result = execute(name, arguments);
@@ -128,7 +131,7 @@ public class LocalAssistantService {
                 return agentStopped(exception.getReason(), toolsUsed, steps, resolvedRange, "VALIDATION_STOP");
             }
         }
-        JsonNode finalResponse = complete(messages, false, 500);
+        JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
         return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "TOOL_BUDGET_REACHED", model, evidence(resolvedRange, toolsUsed));
     }
 
@@ -156,7 +159,7 @@ public class LocalAssistantService {
             toolsUsed.add(name);
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));
         }
-        JsonNode finalResponse = complete(messages, false, 500);
+        JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
         return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL", evidence(resolvedRange, toolsUsed));
     }
 
@@ -190,7 +193,7 @@ public class LocalAssistantService {
 
     private String systemPrompt() {
         DateRange lastMonth = lastMonth();
-        return "You are the Personal Finance Tracker assistant. For factual finance questions, use available finance tools before answering. Use only tool results for facts. Today is " + LocalDate.now() + ". 'Last month' means " + lastMonth.label() + "; do not ask the user to provide those dates. 'Overall' means all saved history unless the question is about credit utilization. When a month name has no year, use the current year. Never invent transactions, values, dates, or financial advice. Tools are read-only.";
+        return "You are the Personal Finance Tracker assistant. For factual finance questions, use available finance tools before answering. Use only tool results for facts. Today is " + LocalDate.now() + ". 'Last month' means " + lastMonth.label() + "; do not ask the user to provide those dates. 'Overall' means all saved history unless the question is about credit utilization. When a month name has no year, use the current year. Never invent transactions, values, dates, or financial advice. Tools are read-only. Complete every requested part of the question. For a comparison plus merchants request, give a concise takeaway, the comparison, and the requested merchant amounts; never end mid-table or omit a requested section.";
     }
     private String contextPrompt(DateRange range, String merchant) {
         List<String> context = new ArrayList<>();

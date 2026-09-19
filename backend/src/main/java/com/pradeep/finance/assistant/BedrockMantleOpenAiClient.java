@@ -30,12 +30,15 @@ public class BedrockMantleOpenAiClient implements LocalModelClient {
     private static final Logger log = LoggerFactory.getLogger(BedrockMantleOpenAiClient.class);
     private final RestClient restClient;
     private final String model;
+    private final String reasoningEffort;
 
     public BedrockMantleOpenAiClient(@Value("${finance.assistant.bedrock.mantle.base-url}") String baseUrl,
                                      @Value("${finance.assistant.bedrock.mantle.api-key:}") String apiKey,
                                      @Value("${finance.assistant.bedrock.timeout-ms:60000}") long timeoutMs,
-                                     @Value("${finance.assistant.model}") String model) {
+                                     @Value("${finance.assistant.model}") String model,
+                                     @Value("${finance.assistant.bedrock.mantle.reasoning-effort:}") String reasoningEffort) {
         this.model = model;
+        this.reasoningEffort = reasoningEffort;
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
         requestFactory.setReadTimeout(Duration.ofMillis(Math.max(timeoutMs, 1000)));
@@ -51,6 +54,7 @@ public class BedrockMantleOpenAiClient implements LocalModelClient {
         request.put("messages", messages);
         request.put("temperature", 0.1);
         request.put("max_tokens", maxTokens);
+        if (reasoningEffort != null && !reasoningEffort.isBlank()) request.put("reasoning_effort", reasoningEffort);
         if (tools != null) {
             request.put("tools", tools);
             request.put("tool_choice", "auto");

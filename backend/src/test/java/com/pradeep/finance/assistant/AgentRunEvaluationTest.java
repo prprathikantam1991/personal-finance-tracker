@@ -36,7 +36,7 @@ class AgentRunEvaluationTest {
 
     @BeforeEach
     void setUp() {
-        service = new LocalAssistantService(financeTools, objectMapper, localModelClient, "synthetic-evaluation-model");
+        service = new LocalAssistantService(financeTools, objectMapper, localModelClient, "synthetic-evaluation-model", 1200);
     }
 
     @Test

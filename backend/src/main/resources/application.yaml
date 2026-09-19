@@ -30,6 +30,7 @@ finance:
     # Change to "bedrock" only after local AWS credentials and model access are configured.
     provider: ${FINANCE_ASSISTANT_PROVIDER:lm-studio}
     model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
+    final-answer-max-tokens: ${FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS:1200}
     lm-studio:
       base-url: ${LM_STUDIO_BASE_URL:http://localhost:1234/v1}
       api-key: ${LM_STUDIO_API_KEY:}
@@ -41,6 +42,7 @@ finance:
       mantle:
         base-url: ${BEDROCK_MANTLE_BASE_URL:https://bedrock-mantle.us-east-1.api.aws/openai/v1}
         api-key: ${BEDROCK_API_KEY:${AWS_BEARER_TOKEN_BEDROCK:}}
+        reasoning-effort: ${BEDROCK_REASONING_EFFORT:}
 
 management:
   endpoints:

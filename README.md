@@ -100,6 +100,17 @@ To evaluate Google Gemma 4 E2B through Mantle, set `FINANCE_ASSISTANT_MODEL=goog
 
 The assistant reserves `1200` output tokens for its final explanation by default so reasoning-capable models can complete multi-part answers. Override this locally with `FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS` when evaluating response length, latency, and cost. Tool-selection turns default to `160` tokens; when evaluating Gemma 4 E2B with high reasoning effort, use `FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS=600` so it has enough room to reason and return a function call.
 
+### Start script
+
+Use the repository launcher instead of repeatedly setting environment variables by hand. It never saves credentials; set your Bedrock API key once in the current PowerShell session, then run:
+
+```powershell
+$env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-api-key"
+./scripts/start-backend.ps1
+```
+
+The defaults start Bedrock Mantle with `google.gemma-4-e2b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. To preview the effective configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. You can select another model without editing source code, for example `./scripts/start-backend.ps1 -Model google.gemma-4-31b -ReasoningEffort ''`.
+
 ## Verify changes
 
 ```powershell

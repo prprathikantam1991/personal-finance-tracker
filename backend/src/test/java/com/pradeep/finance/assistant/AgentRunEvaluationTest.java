@@ -97,6 +97,19 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void normalizesTwoNamedMonthsBeforeExecutingAComparisonTool() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"compare_periods\",\"arguments\":\"{\\\"from\\\":\\\"2026-07-01\\\",\\\"to\\\":\\\"2026-08-31\\\",\\\"compareFrom\\\":\\\"2026-07-01\\\",\\\"compareTo\\\":\\\"2026-08-31\\\"}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"Comparison complete.\"}"));
+        when(financeTools.comparePeriods(any(), any(), any(), any())).thenReturn(null);
+
+        AgentRunResponse result = service.agentRun("Compare July and August 2026.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("COMPLETED");
+        verify(financeTools).comparePeriods(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31), java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31));
+    }
+
+    @Test
     void stopsBeforeExecutingWhenTheModelRequestsMultipleToolsInOneRound() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
                 + "{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}},"

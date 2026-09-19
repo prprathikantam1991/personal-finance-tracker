@@ -78,7 +78,8 @@ public class LocalAssistantService {
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)
                 + " For an agent run, request at most one finance tool at a time. After each tool result, decide whether another allowed tool is needed or answer."
-                + " When a resolved period is provided, use it for every period-sensitive lookup. Do not request data that an earlier tool result already provided."));
+                + " When a resolved period is provided, use it for every period-sensitive lookup. Do not request data that an earlier tool result already provided."
+                + requiredToolInstruction(question)));
         safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
         messages.add(message("user", question.trim()));
 
@@ -116,7 +117,7 @@ public class LocalAssistantService {
                     JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
                     return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
-                JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange));
+                JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange), question);
                 validateAgentCall(name, arguments);
                 if (!completedCalls.add(name + ":" + json(arguments))) {
                     JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
@@ -265,6 +266,7 @@ public class LocalAssistantService {
     private String money(BigDecimal value) { return NumberFormat.getCurrencyInstance(Locale.US).format(value == null ? BigDecimal.ZERO : value); }
     private String percent(BigDecimal value) { return value == null ? "not available" : value.stripTrailingZeros().toPlainString() + "%"; }
     private record DateRange(LocalDate from, LocalDate to) { String label() { return from + " through " + to; } }
+    private record ComparisonRange(DateRange first, DateRange second) { }
 
     /** Tool-choice turns need compact structured output; reserve the larger budget for the final explanation. */
     private JsonNode complete(List<Map<String, Object>> messages, boolean includeTools, int maxTokens) {
@@ -302,7 +304,7 @@ public class LocalAssistantService {
      * already resolved from the user's request. Project to the read-only tool schema before
      * execution so those hints cannot widen or otherwise change a data lookup.
      */
-    private JsonNode normalizeArguments(String name, JsonNode supplied, DateRange resolvedRange) {
+    private JsonNode normalizeArguments(String name, JsonNode supplied, DateRange resolvedRange, String question) {
         if (!supplied.isObject()) return supplied;
         Set<String> allowedFields = switch (name) {
             case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
@@ -319,7 +321,33 @@ public class LocalAssistantService {
             if (!normalized.has("from")) normalized.put("from", resolvedRange.from().toString());
             if (!normalized.has("to")) normalized.put("to", resolvedRange.to().toString());
         }
+        ComparisonRange comparison = comparisonRange(question);
+        if ("compare_periods".equals(name) && comparison != null) {
+            normalized.put("from", comparison.first().from().toString());
+            normalized.put("to", comparison.first().to().toString());
+            normalized.put("compareFrom", comparison.second().from().toString());
+            normalized.put("compareTo", comparison.second().to().toString());
+        }
         return normalized;
+    }
+
+    private String requiredToolInstruction(String question) {
+        String normalized = question.toLowerCase(Locale.ROOT);
+        List<String> required = new ArrayList<>();
+        if (comparisonRange(question) != null) required.add("compare_periods");
+        if (normalized.contains("merchant")) required.add("get_merchant_spending");
+        return required.isEmpty() ? "" : " This request requires these tools before a final answer: " + String.join(", then ", required) + ".";
+    }
+
+    private ComparisonRange comparisonRange(String question) {
+        Matcher matcher = MONTH_NAME.matcher(question);
+        List<Integer> months = new ArrayList<>();
+        while (matcher.find()) months.add(monthNumber(matcher.group(1)));
+        if (months.size() < 2) return null;
+        int year = LocalDate.now().getYear();
+        YearMonth first = YearMonth.of(year, months.get(0));
+        YearMonth second = YearMonth.of(year, months.get(1));
+        return new ComparisonRange(new DateRange(first.atDay(1), first.atEndOfMonth()), new DateRange(second.atDay(1), second.atEndOfMonth()));
     }
 
     private boolean usesDateRange(String name) {

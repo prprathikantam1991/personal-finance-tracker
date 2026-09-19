@@ -90,7 +90,7 @@ cd backend
 mvn spring-boot:run
 ```
 
-The Runtime/Converse adapter uses the standard AWS credential chain; it does not store an access key, statement, database, or account number in application configuration. Bedrock receives only the question, approved tool definitions, and compact tool results needed for the answer. Mantle-only models, including Gemma 4 31B, use a separate OpenAI-compatible adapter with a `BEDROCK_API_KEY` environment variable. GPT-5.6 Luna uses Bedrock's separate OpenAI Responses interface and will be evaluated through its own adapter.
+The Runtime/Converse adapter uses the standard AWS credential chain; it does not store an access key, statement, database, or account number in application configuration. Bedrock receives only the question, approved tool definitions, and compact tool results needed for the answer. Mantle-only models, including Gemma 4 31B, use a separate OpenAI-compatible adapter with `AWS_BEARER_TOKEN_BEDROCK` (or the app alias `BEDROCK_API_KEY`). GPT-5.6 Luna uses Bedrock's separate OpenAI Responses interface and will be evaluated through its own adapter.
 
 ## Verify changes
 

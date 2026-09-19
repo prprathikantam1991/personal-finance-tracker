@@ -348,7 +348,7 @@ Set `FINANCE_ASSISTANT_PROVIDER=bedrock`, select an approved Converse-compatible
 
 For example, Claude Haiku 4.5 uses `global.anthropic.claude-haiku-4-5-20251001-v1:0` from `us-east-1`. A global inference profile may process in another supported region, so it is not a single-region data-residency option. The backend still never transmits PDFs, SQLite files, database credentials, or unrestricted transaction history. It sends only the user question, tool schemas, and the compact tool results selected for that question.
 
-The first Runtime adapter targets Bedrock's native Converse API, which is appropriate for Claude models. Gemma 4 31B is Mantle-only, so it uses the separate `bedrock-mantle` OpenAI-compatible adapter and a Bedrock API key supplied through `BEDROCK_API_KEY`. GPT-5.6 Luna uses Bedrock's OpenAI-compatible Responses API and will use a separate adapter before it is enabled as a selectable provider.
+The first Runtime adapter targets Bedrock's native Converse API, which is appropriate for Claude models. Gemma 4 31B is Mantle-only, so it uses the separate `bedrock-mantle` OpenAI-compatible adapter and a Bedrock API key supplied through `AWS_BEARER_TOKEN_BEDROCK` (or the app alias `BEDROCK_API_KEY`). GPT-5.6 Luna uses Bedrock's OpenAI-compatible Responses API and will use a separate adapter before it is enabled as a selectable provider.
 
 ## 14. Security and privacy controls
 

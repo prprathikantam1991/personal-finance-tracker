@@ -4,6 +4,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -38,6 +41,30 @@ class AssistantControllerTest {
                 .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready."));
 
         mockMvc.perform(post("/api/assistant/chat").contentType("application/json")
+                        .content("{\"message\":\"What is my credit utilization?\",\"conversation\":[]}"))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void exposesTheAgentTraceForACompletedAgentRun() throws Exception {
+        when(localAssistantService.agentRun(any(), any())).thenReturn(new AgentRunResponse(
+                "Your utilization is 20%.", List.of("get_credit_utilization"),
+                List.of(new AgentStep(1, "get_credit_utilization", "Completed")),
+                "COMPLETED", "synthetic-evaluation-model", List.of("Confirmed saved finance data")));
+
+        mockMvc.perform(post("/api/assistant/agent-runs").contentType("application/json")
+                        .content("{\"message\":\"What is my credit utilization?\",\"conversation\":[]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stopReason").value("COMPLETED"))
+                .andExpect(jsonPath("$.steps[0].tool").value("get_credit_utilization"));
+    }
+
+    @Test
+    void returnsServiceUnavailableWhenAgentRunCannotReachLmStudio() throws Exception {
+        when(localAssistantService.agentRun(any(), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready."));
+
+        mockMvc.perform(post("/api/assistant/agent-runs").contentType("application/json")
                         .content("{\"message\":\"What is my credit utilization?\",\"conversation\":[]}"))
                 .andExpect(status().isServiceUnavailable());
     }

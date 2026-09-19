@@ -4,9 +4,7 @@ import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -16,11 +14,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
@@ -35,23 +29,15 @@ public class LocalAssistantService {
     private static final Pattern MERCHANT = Pattern.compile("(?i)\\bat\\s+(.+?)(?=\\s+(?:for|in|during)\\b|[?!.]?$)");
     private final FinanceToolsService financeTools;
     private final ObjectMapper objectMapper;
-    private final RestClient restClient;
+    private final LocalModelClient localModelClient;
     private final String model;
 
-    public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper,
-                                 @Value("${finance.assistant.lm-studio.base-url}") String baseUrl,
-                                 @Value("${finance.assistant.lm-studio.model}") String model,
-                                 @Value("${finance.assistant.lm-studio.api-key:}") String apiKey,
-                                 @Value("${finance.assistant.lm-studio.timeout-ms:60000}") long timeoutMs) {
+    public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper, LocalModelClient localModelClient,
+                                 @Value("${finance.assistant.lm-studio.model}") String model) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
+        this.localModelClient = localModelClient;
         this.model = model;
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(Duration.ofSeconds(5));
-        requestFactory.setReadTimeout(Duration.ofMillis(Math.max(timeoutMs, 1000)));
-        RestClient.Builder builder = RestClient.builder().baseUrl(baseUrl).requestFactory(requestFactory);
-        if (apiKey != null && !apiKey.isBlank()) builder.defaultHeader("Authorization", "Bearer " + apiKey);
-        this.restClient = builder.build();
     }
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
@@ -223,28 +209,7 @@ public class LocalAssistantService {
     private record DateRange(LocalDate from, LocalDate to) { String label() { return from + " through " + to; } }
 
     private JsonNode complete(List<Map<String, Object>> messages, boolean includeTools) {
-        Map<String, Object> request = new LinkedHashMap<>();
-        request.put("model", model);
-        request.put("messages", messages);
-        request.put("temperature", 0.1);
-        request.put("max_tokens", 700);
-        if (includeTools) { request.put("tools", toolDefinitions()); request.put("tool_choice", "auto"); }
-        try {
-            JsonNode response = restClient.post().uri("/chat/completions").contentType(MediaType.APPLICATION_JSON).body(request).retrieve().body(JsonNode.class);
-            if (response == null || response.path("choices").isEmpty() || response.path("choices").path(0).path("message").isMissingNode()) {
-                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model returned an unusable response. Try again, or reload the model in LM Studio.");
-            }
-            return response;
-        } catch (ResponseStatusException exception) {
-            throw exception;
-        } catch (ResourceAccessException exception) {
-            if (isTimeout(exception)) {
-                throw new ResponseStatusException(HttpStatus.GATEWAY_TIMEOUT, "The local model took longer than expected. It may still be loading; wait a moment and try again.", exception);
-            }
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready. Start its local server and load a model, then try again.", exception);
-        } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "LM Studio is not ready. Start its local server and load a model, then try again.", exception);
-        }
+        return localModelClient.complete(messages, includeTools ? toolDefinitions() : null);
     }
 
     private Object execute(String name, JsonNode args) {
@@ -313,14 +278,6 @@ public class LocalAssistantService {
     private Map<String, Object> stringProperty() { return Map.of("type", "string"); }
     private Map<String, Object> message(String role, String content) { return Map.of("role", role, "content", content); }
     private String content(JsonNode message) { String value = message.path("content").asText("").trim(); return value.isBlank() ? "I could not produce an answer from the available local data." : value; }
-    private boolean isTimeout(Throwable exception) {
-        Throwable current = exception;
-        while (current != null) {
-            if (current instanceof java.net.SocketTimeoutException || current instanceof java.net.http.HttpTimeoutException) return true;
-            current = current.getCause();
-        }
-        return false;
-    }
     private JsonNode parseArguments(String value) { try { return objectMapper.readTree(value); } catch (JsonProcessingException exception) { throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model returned invalid tool instructions. Try again, or reload the model in LM Studio."); } }
     private String json(Object value) { try { return objectMapper.writeValueAsString(value); } catch (JsonProcessingException exception) { throw new IllegalStateException("Could not prepare finance tool result.", exception); } }
     private LocalDate date(JsonNode args, String field) { String value = text(args, field); return value == null ? null : LocalDate.parse(value); }

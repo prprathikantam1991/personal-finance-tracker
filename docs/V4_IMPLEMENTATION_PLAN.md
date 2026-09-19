@@ -132,7 +132,7 @@ Create a repeatable evaluation set with expected tool sequence and financial sem
 2. Implement a three-round sequential orchestrator using the existing LM Studio `RestClient` integration.
 3. Add argument schemas and tests for unknown tools, invalid arguments, and date/size/timeout limits.
 4. Expose a separate Angular “Agent run” experience that shows the final answer and human-readable tool trace.
-5. Build a local evaluation fixture set using synthetic transactions, then validate a few real questions without committing their answers.
+5. **In progress:** Build a local evaluation fixture set using synthetic model replies and finance results, then validate a few real questions without committing their answers. `AgentRunEvaluationTest` now covers a successful two-step trace, a multiple-tool rejection, and a date-range rejection without contacting LM Studio or using real finance data.
 
 This makes V4 a deliberate evolution of V3 rather than an opaque agent framework integration. Spring AI remains optional: it may reduce provider-specific request code later, but it does not replace the validation, safety policy, financial tool implementations, or evaluation work above.
 

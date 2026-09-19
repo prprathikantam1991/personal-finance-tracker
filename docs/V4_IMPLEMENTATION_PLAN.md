@@ -1,6 +1,6 @@
 # V4 — Agentic Finance Workflows Implementation Plan
 
-**Status:** in progress — the bounded Agent Run endpoint and opt-in UI mode are implemented; real multi-step model validation remains next.
+**Status:** in progress — the bounded Agent Run endpoint and opt-in UI mode are implemented; a configurable Amazon Bedrock Runtime/Converse provider is now available for cloud-model evaluation.
 
 V4 is not “give the model more permissions.” It is a controlled multi-step version of V3: the model may choose several existing read-only finance tools in sequence, under server-enforced limits, to answer questions that cannot be handled by one lookup.
 
@@ -132,9 +132,19 @@ Create a repeatable evaluation set with expected tool sequence and financial sem
 2. Implement a three-round sequential orchestrator using the existing LM Studio `RestClient` integration.
 3. Add argument schemas and tests for unknown tools, invalid arguments, and date/size/timeout limits.
 4. Expose a separate Angular “Agent run” experience that shows the final answer and human-readable tool trace.
-5. **In progress:** Build a local evaluation fixture set using synthetic model replies and finance results, then validate a few real questions without committing their answers. `AgentRunEvaluationTest` now covers a successful two-step trace, a multiple-tool rejection, and a date-range rejection without contacting LM Studio or using real finance data.
+5. **In progress:** Build a local evaluation fixture set using synthetic model replies and finance results, then validate a few real questions without committing their answers. `AgentRunEvaluationTest` now covers a successful two-step trace, a multiple-tool rejection, and a date-range rejection without contacting LM Studio or using real finance data. Tool-selection rounds use a compact 160-token budget; the final explanation retains a 500-token budget so local models spend less time on orchestration.
+
+### Model fallback behavior
+
+Some local models can answer text prompts but do not reliably emit OpenAI-compatible tool calls. If an Agent Run receives no tool call on its first turn, the service never accepts an ungrounded model answer as a finance fact. For questions covered by a deterministic read-only finance operation, it returns a clearly labeled `FALLBACK` result with the same trace and evidence metadata. For other questions it returns `NO_TOOL_REQUESTED` and asks for a more specific question or a tool-capable local model. This preserves source-of-truth behavior while making model capability visible.
 
 This makes V4 a deliberate evolution of V3 rather than an opaque agent framework integration. Spring AI remains optional: it may reduce provider-specific request code later, but it does not replace the validation, safety policy, financial tool implementations, or evaluation work above.
+
+### Cloud-provider evaluation boundary
+
+`BedrockConverseClient` is a provider adapter, not a replacement agent framework. It is enabled only with `FINANCE_ASSISTANT_PROVIDER=bedrock`; otherwise the existing LM Studio adapter remains active. The adapter translates the same server-generated allow-listed tool catalog into Bedrock Converse tool definitions and converts a Bedrock tool-use response into the existing normalized model response used by the orchestrator. Consequently, argument validation, three-step limit, response-size limit, evidence, and read-only finance boundary remain in Spring Boot and do not depend on a cloud model.
+
+The initial Bedrock evaluation target is Claude Haiku 4.5. Converse-compatible Gemma models can use this same adapter. GPT-5.6 Luna is intentionally deferred to a separate Bedrock OpenAI Responses adapter because it uses a different protocol; it must pass the same agent evaluation suite before being offered in the application.
 
 ## Technology choice
 

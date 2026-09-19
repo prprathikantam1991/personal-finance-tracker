@@ -1,6 +1,6 @@
 # Personal Finance Tracker — V3 AI Assistant Architecture
 
-**Status:** implemented foundation; local LM Studio integration active  
+**Status:** implemented foundation; LM Studio default plus opt-in Amazon Bedrock Runtime adapter
 **Primary implementation:** `backend/`  
 **User interface:** `frontend/`  
 **Data policy:** local-first and read-only in V3
@@ -28,6 +28,7 @@ This distinction is the central design principle:
 - Let an LLM choose and combine only approved read-only capabilities.
 - Make every answer traceable to the tools used.
 - Work with a local model in LM Studio, without a cloud account or API key by default.
+- Support an explicit opt-in Amazon Bedrock Runtime model without changing finance-tool safety rules.
 - Keep the tool layer provider-independent so a cloud LLM can be introduced later without changing finance logic.
 
 ### Explicit V3 non-goals
@@ -45,7 +46,7 @@ flowchart LR
     U[User] --> UI[Angular Finance Assistant]
     UI -->|POST /api/assistant/chat| API[Spring Boot Assistant API]
     API --> ORCH[LocalAssistantService]
-    ORCH <-->|OpenAI-compatible HTTP| LM[LM Studio local server]
+    ORCH <-->|provider adapter| LM[LM Studio or Bedrock model]
     ORCH --> TOOLS[FinanceToolsService]
     TOOLS --> DOMAIN[Existing finance services]
     DOMAIN --> DB[(SQLite)]
@@ -63,7 +64,8 @@ All components normally run on the same computer:
 | Angular UI | Captures the question, displays answer and data-used labels | Browser UI only |
 | Assistant API | Validates request and returns a response | Application boundary |
 | `LocalAssistantService` | Sends prompts, exposes tools, validates tool names, orchestrates tool calls | AI safety boundary |
-| LM Studio | Local language model inference | Local model process |
+| LM Studio | Default local language model inference | Local model process |
+| Amazon Bedrock Runtime | Optional cloud inference through the application's AWS identity | Cloud boundary; receives minimal prompt/tool context only |
 | `FinanceToolsService` | Read-only, structured finance operations | Data access boundary |
 | Existing domain services | Accounts, transactions, dashboards, recurring detection | Business logic boundary |
 | SQLite / statements | Persisted source data | Source of truth |
@@ -315,16 +317,17 @@ Content-Type: application/json
 
 `toolsUsed` is evidence for the user interface and an audit/debugging aid. It does not expose raw database credentials, SQL, or hidden system instructions.
 
-## 13. LM Studio connection
+## 13. Model provider configuration
 
 The default development configuration is in `application.yaml`:
 
 ```yaml
 finance:
   assistant:
+    provider: ${FINANCE_ASSISTANT_PROVIDER:lm-studio}
+    model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
     lm-studio:
       base-url: ${LM_STUDIO_BASE_URL:http://localhost:1234/v1}
-      model: ${LM_STUDIO_MODEL:gemma-4-e2b-it-qat}
       api-key: ${LM_STUDIO_API_KEY:}
 ```
 
@@ -338,6 +341,14 @@ finance:
 6. Open `/assistant` in the Angular application.
 
 LM Studio normally does not require a key for a server bound to `localhost`. If LM Studio authentication is enabled, provide `LM_STUDIO_API_KEY` as an environment variable; never commit the token to `application.yaml`, source files, or Git.
+
+### Bedrock Runtime adapter
+
+Set `FINANCE_ASSISTANT_PROVIDER=bedrock`, select an approved Converse-compatible model through `FINANCE_ASSISTANT_MODEL`, and set `AWS_PROFILE` to a local IAM profile. The adapter uses the AWS SDK's standard credential chain and the `bedrock-runtime` Converse API. It converts the existing provider-independent tool definitions into Bedrock tool specifications, then normalizes Bedrock tool-use blocks back into the assistant's existing validated tool-call contract.
+
+For example, Claude Haiku 4.5 uses `global.anthropic.claude-haiku-4-5-20251001-v1:0` from `us-east-1`. A global inference profile may process in another supported region, so it is not a single-region data-residency option. The backend still never transmits PDFs, SQLite files, database credentials, or unrestricted transaction history. It sends only the user question, tool schemas, and the compact tool results selected for that question.
+
+The first adapter targets Bedrock's native Converse API, which is appropriate for Claude and Gemma models. GPT-5.6 Luna is available through Bedrock's OpenAI-compatible Responses API and will use a separate adapter before it is enabled as a selectable provider.
 
 ## 14. Security and privacy controls
 

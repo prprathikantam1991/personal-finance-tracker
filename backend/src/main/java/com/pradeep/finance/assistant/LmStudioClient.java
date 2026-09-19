@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -18,12 +19,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 /** Production adapter for LM Studio's local OpenAI-compatible chat endpoint. */
 @Component
+@ConditionalOnProperty(name = "finance.assistant.provider", havingValue = "lm-studio", matchIfMissing = true)
 public class LmStudioClient implements LocalModelClient {
     private final RestClient restClient;
     private final String model;
 
     public LmStudioClient(@Value("${finance.assistant.lm-studio.base-url}") String baseUrl,
-                          @Value("${finance.assistant.lm-studio.model}") String model,
+                          @Value("${finance.assistant.model}") String model,
                           @Value("${finance.assistant.lm-studio.api-key:}") String apiKey,
                           @Value("${finance.assistant.lm-studio.timeout-ms:60000}") long timeoutMs) {
         this.model = model;
@@ -36,12 +38,12 @@ public class LmStudioClient implements LocalModelClient {
     }
 
     @Override
-    public JsonNode complete(List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
+    public JsonNode complete(List<Map<String, Object>> messages, List<Map<String, Object>> tools, int maxTokens) {
         Map<String, Object> request = new LinkedHashMap<>();
         request.put("model", model);
         request.put("messages", messages);
         request.put("temperature", 0.1);
-        request.put("max_tokens", 700);
+        request.put("max_tokens", maxTokens);
         if (tools != null) {
             request.put("tools", tools);
             request.put("tool_choice", "auto");

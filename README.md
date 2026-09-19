@@ -27,7 +27,7 @@ flowchart LR
     I --> D[(SQLite)]
     D --> W[Angular web application]
     D --> T[Read-only finance tools]
-    T --> A[Local LM Studio assistant]
+    T --> A[Configured assistant provider]
     A --> W
 ```
 
@@ -46,6 +46,7 @@ flowchart LR
 - Account balances, card terms, statement activity, utilization, and historical snapshots.
 - Transaction search and filtering, Dashboard summaries/trends, merchant spending, recurring detection, and reminders.
 - Local LM Studio AI Assistant with structured tool calling and visible data-used evidence.
+- Opt-in Amazon Bedrock Runtime adapter for Claude Haiku 4.5 and other Converse-compatible models; finance tools remain local and read-only.
 
 ## Run locally
 
@@ -76,6 +77,20 @@ Open `http://localhost:4200`.
 4. Open `/assistant` and ask a question.
 
 The default model connection can be overridden with `LM_STUDIO_BASE_URL`, `LM_STUDIO_MODEL`, and `LM_STUDIO_API_KEY`. Do not put keys in source code.
+
+### Amazon Bedrock Assistant (opt-in)
+
+The default remains LM Studio. To use the Bedrock Runtime adapter, grant the local AWS identity permission to invoke an approved model, then start the backend with a local AWS profile:
+
+```powershell
+$env:FINANCE_ASSISTANT_PROVIDER = "bedrock"
+$env:FINANCE_ASSISTANT_MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+$env:AWS_PROFILE = "finance-tracker-bedrock"
+cd backend
+mvn spring-boot:run
+```
+
+The service uses the standard AWS credential chain; it does not store an access key, statement, database, or account number in application configuration. Bedrock receives only the question, approved tool definitions, and compact tool results needed for the answer. GPT-5.6 Luna uses Bedrock's separate OpenAI Responses interface and will be evaluated through a dedicated adapter after this first Converse-compatible provider is proven.
 
 ## Verify changes
 

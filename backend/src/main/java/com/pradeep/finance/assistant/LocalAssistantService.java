@@ -33,7 +33,7 @@ public class LocalAssistantService {
     private final String model;
 
     public LocalAssistantService(FinanceToolsService financeTools, ObjectMapper objectMapper, LocalModelClient localModelClient,
-                                 @Value("${finance.assistant.lm-studio.model}") String model) {
+                                 @Value("${finance.assistant.model}") String model) {
         this.financeTools = financeTools;
         this.objectMapper = objectMapper;
         this.localModelClient = localModelClient;
@@ -73,11 +73,26 @@ public class LocalAssistantService {
         List<String> toolsUsed = new ArrayList<>();
         List<AgentStep> steps = new ArrayList<>();
         for (int round = 1; round <= 3; round++) {
-            JsonNode modelResponse = complete(messages, true);
+            JsonNode modelResponse = complete(messages, true, 160);
             JsonNode assistantMessage = modelResponse.path("choices").path(0).path("message");
             List<JsonNode> calls = new ArrayList<>();
             assistantMessage.path("tool_calls").forEach(calls::add);
-            if (calls.isEmpty()) return new AgentRunResponse(content(assistantMessage), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+            if (calls.isEmpty()) {
+                if (toolsUsed.isEmpty()) {
+                    Optional<AssistantChatResponse> fallback = directAnswer(question, safeConversation);
+                    if (fallback.isPresent()) {
+                        AssistantChatResponse answer = fallback.get();
+                        List<AgentStep> fallbackSteps = answer.toolsUsed().stream()
+                                .map(tool -> new AgentStep(1, tool, "Fallback"))
+                                .toList();
+                        return new AgentRunResponse(answer.answer(), answer.toolsUsed(), fallbackSteps,
+                                "FALLBACK", model, evidence(resolvedRange, answer.toolsUsed()));
+                    }
+                    return agentStopped("The local model did not request finance data for this question. Try a more specific question or use a tool-capable model in LM Studio.",
+                            toolsUsed, steps, resolvedRange, "NO_TOOL_REQUESTED");
+                }
+                return new AgentRunResponse(content(assistantMessage), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+            }
             if (calls.size() != 1) return agentStopped("The local model requested more than one tool at once. Please try the question again.", toolsUsed, steps, resolvedRange, "MULTIPLE_TOOLS_REQUESTED");
 
             JsonNode call = calls.getFirst();
@@ -97,7 +112,7 @@ public class LocalAssistantService {
                 return agentStopped(exception.getReason(), toolsUsed, steps, resolvedRange, "VALIDATION_STOP");
             }
         }
-        JsonNode finalResponse = complete(messages, false);
+        JsonNode finalResponse = complete(messages, false, 500);
         return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "TOOL_BUDGET_REACHED", model, evidence(resolvedRange, toolsUsed));
     }
 
@@ -107,7 +122,7 @@ public class LocalAssistantService {
     }
 
     private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange) {
-        JsonNode first = complete(messages, true);
+        JsonNode first = complete(messages, true, 160);
         JsonNode assistantMessage = first.path("choices").path(0).path("message");
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);
@@ -125,7 +140,7 @@ public class LocalAssistantService {
             toolsUsed.add(name);
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));
         }
-        JsonNode finalResponse = complete(messages, false);
+        JsonNode finalResponse = complete(messages, false, 500);
         return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL", evidence(resolvedRange, toolsUsed));
     }
 
@@ -208,8 +223,9 @@ public class LocalAssistantService {
     private String percent(BigDecimal value) { return value == null ? "not available" : value.stripTrailingZeros().toPlainString() + "%"; }
     private record DateRange(LocalDate from, LocalDate to) { String label() { return from + " through " + to; } }
 
-    private JsonNode complete(List<Map<String, Object>> messages, boolean includeTools) {
-        return localModelClient.complete(messages, includeTools ? toolDefinitions() : null);
+    /** Tool-choice turns need compact structured output; reserve the larger budget for the final explanation. */
+    private JsonNode complete(List<Map<String, Object>> messages, boolean includeTools, int maxTokens) {
+        return localModelClient.complete(messages, includeTools ? toolDefinitions() : null, maxTokens);
     }
 
     private Object execute(String name, JsonNode args) {

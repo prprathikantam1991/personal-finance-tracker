@@ -2,6 +2,7 @@ package com.pradeep.finance.assistant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -40,7 +41,7 @@ class AgentRunEvaluationTest {
 
     @Test
     void completesASequentialTwoToolAnalysisWithAVisibleTrace() throws Exception {
-        when(localModelClient.complete(any(), any())).thenReturn(
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
                 response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}}]}"),
                 response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"get_recurring_activity\",\"arguments\":\"{}\"}}]}"),
                 response("{\"role\":\"assistant\",\"content\":\"Utilization is stable and no recurring risk was found.\"}"));
@@ -55,14 +56,14 @@ class AgentRunEvaluationTest {
         assertThat(result.answer()).contains("Utilization is stable");
         assertThat(result.toolsUsed()).containsExactly("get_credit_utilization", "get_recurring_activity");
         assertThat(result.steps()).extracting(AgentStep::tool).containsExactly("get_credit_utilization", "get_recurring_activity");
-        verify(localModelClient, times(3)).complete(any(), any());
+        verify(localModelClient, times(3)).complete(any(), any(), anyInt());
         verify(financeTools).creditUtilization();
         verify(financeTools).recurringActivity();
     }
 
     @Test
     void stopsBeforeExecutingWhenTheModelRequestsMultipleToolsInOneRound() throws Exception {
-        when(localModelClient.complete(any(), any())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
                 + "{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}},"
                 + "{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"get_recurring_activity\",\"arguments\":\"{}\"}}]}"));
 
@@ -75,8 +76,24 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void usesGroundedFallbackWhenTheLocalModelDoesNotRequestAnyTool() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"content\":\"\"}"));
+        when(financeTools.creditUtilization()).thenReturn(new FinanceToolsService.CreditUtilization(
+                BigDecimal.valueOf(10_000), BigDecimal.valueOf(2_000), BigDecimal.valueOf(8_000),
+                BigDecimal.valueOf(20), BigDecimal.valueOf(18), 1, 1, List.of()));
+
+        AgentRunResponse result = service.agentRun("What is my overall credit utilization?", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("20%");
+        assertThat(result.steps()).singleElement().satisfies(step -> assertThat(step.outcome()).isEqualTo("Fallback"));
+        verify(financeTools).creditUtilization();
+    }
+
+    @Test
     void rejectsAnOverlyLargeDateRangeBeforeExecutingTheRequestedTool() throws Exception {
-        when(localModelClient.complete(any(), any())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_category_spending\",\"arguments\":\"{\\\"from\\\":\\\"2024-01-01\\\",\\\"to\\\":\\\"2026-09-01\\\"}\"}}]}"));
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_category_spending\",\"arguments\":\"{\\\"from\\\":\\\"2024-01-01\\\",\\\"to\\\":\\\"2026-09-01\\\"}\"}}]}"));
 
         AgentRunResponse result = service.agentRun("Show spending", List.of());
 

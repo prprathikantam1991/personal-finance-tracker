@@ -38,6 +38,9 @@ finance:
       region: ${AWS_REGION:us-east-1}
       profile: ${AWS_PROFILE:}
       timeout-ms: ${BEDROCK_TIMEOUT_MS:60000}
+      mantle:
+        base-url: ${BEDROCK_MANTLE_BASE_URL:https://bedrock-mantle.us-east-1.api.aws/openai/v1}
+        api-key: ${BEDROCK_API_KEY:}
 
 management:
   endpoints:

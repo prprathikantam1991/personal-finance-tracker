@@ -144,7 +144,7 @@ This makes V4 a deliberate evolution of V3 rather than an opaque agent framework
 
 `BedrockConverseClient` is a provider adapter, not a replacement agent framework. It is enabled only with `FINANCE_ASSISTANT_PROVIDER=bedrock`; otherwise the existing LM Studio adapter remains active. The adapter translates the same server-generated allow-listed tool catalog into Bedrock Converse tool definitions and converts a Bedrock tool-use response into the existing normalized model response used by the orchestrator. Consequently, argument validation, three-step limit, response-size limit, evidence, and read-only finance boundary remain in Spring Boot and do not depend on a cloud model.
 
-The initial Bedrock evaluation target is Claude Haiku 4.5. Converse-compatible Gemma models can use this same adapter. GPT-5.6 Luna is intentionally deferred to a separate Bedrock OpenAI Responses adapter because it uses a different protocol; it must pass the same agent evaluation suite before being offered in the application.
+The initial Runtime evaluation target is Claude Haiku 4.5. Gemma 4 31B is Mantle-only, so it uses the separate OpenAI-compatible `bedrock-mantle` adapter and must receive the same evaluation. GPT-5.6 Luna is intentionally deferred to a separate Bedrock OpenAI Responses adapter because it uses a different protocol; it must pass the same agent evaluation suite before being offered in the application.
 
 ## Technology choice
 

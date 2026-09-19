@@ -59,6 +59,10 @@ mvn spring-boot:run
 
 The API runs at `http://localhost:8080`. SQLite data is intentionally local at `backend/data/finance-tracker.db` and is ignored by Git.
 
+### Local logs
+
+The backend writes rolling local logs to `backend/data/logs/finance-tracker.log` (14 days, capped at 100 MB). They record operational events such as provider errors and agent-run metadata, but deliberately exclude API keys, raw assistant questions, answers, statements, and transaction rows.
+
 ### Frontend
 
 ```powershell

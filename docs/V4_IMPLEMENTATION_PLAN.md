@@ -1,6 +1,6 @@
 # V4 — Agentic Finance Workflows Implementation Plan
 
-**Status:** in progress — the bounded Agent Run endpoint and opt-in UI mode are implemented; a configurable Amazon Bedrock Runtime/Converse provider is now available for cloud-model evaluation.
+**Status:** in progress — the bounded Agent Run endpoint, opt-in UI mode, sequential multi-tool execution, local evaluation coverage, and configurable cloud-provider adapters are implemented. The remaining work is evaluation expansion and final user-experience polish.
 
 V4 is not “give the model more permissions.” It is a controlled multi-step version of V3: the model may choose several existing read-only finance tools in sequence, under server-enforced limits, to answer questions that cannot be handled by one lookup.
 
@@ -71,7 +71,7 @@ AgentStep(index, requestedTool, validatedArguments, outcome, duration)
 AgentRunResponse(answer, evidence, steps, stopReason)
 ```
 
-`ToolDefinition` objects are created in backend code, not by the model. The validation layer rejects an unknown name, missing/extra arguments, invalid dates, an over-wide date range, or a result that exceeds the response-size budget. Tool results are compact typed objects, not unrestricted transaction dumps.
+`ToolDefinition` objects are created in backend code, not by the model. The validation layer rejects an unknown name, malformed arguments, invalid dates, an over-wide date range, or a result that exceeds the response-size budget. For read-only tools, harmless presentation hints such as a requested display limit are removed before execution; only supported data filters are used. Resolved date context is preserved for period-sensitive calls, and repeated undated calls are stopped rather than widened to all history. Tool results are compact typed objects, not unrestricted transaction dumps.
 
 ## Implementation phases
 
@@ -132,7 +132,11 @@ Create a repeatable evaluation set with expected tool sequence and financial sem
 2. Implement a three-round sequential orchestrator using the existing LM Studio `RestClient` integration.
 3. Add argument schemas and tests for unknown tools, invalid arguments, and date/size/timeout limits.
 4. Expose a separate Angular “Agent run” experience that shows the final answer and human-readable tool trace.
-5. **In progress:** Build a local evaluation fixture set using synthetic model replies and finance results, then validate a few real questions without committing their answers. `AgentRunEvaluationTest` now covers a successful two-step trace, a multiple-tool rejection, and a date-range rejection without contacting LM Studio or using real finance data. Tool-selection rounds use a compact 160-token budget; the final explanation retains a 500-token budget so local models spend less time on orchestration.
+5. **In progress:** Build a local evaluation fixture set using synthetic model replies and finance results, then validate a few real questions without committing their answers. `AgentRunEvaluationTest` covers a successful two-step trace, optional presentation arguments, preserved merchant-month context, duplicate lookup prevention, multiple-tool rejection, and date-range rejection without contacting a model server or using real finance data. Tool-selection rounds use a compact 160-token budget; the final explanation retains a 500-token budget so local models spend less time on orchestration.
+
+### Local operational logging
+
+Spring Boot writes a rolling local log at `backend/data/logs/finance-tracker.log` (14 days, 100 MB total cap). It records operational events and safe agent metadata—provider/model, tool names, step count, and stop reason—without recording API keys, raw questions, answers, statement contents, or transaction rows. The log directory is part of the ignored local `backend/data` tree.
 
 ### Model fallback behavior
 

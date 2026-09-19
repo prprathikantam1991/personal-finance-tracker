@@ -128,4 +128,5 @@ cd frontend; npm run build
 - [AI Assistant Architecture](docs/AI_ASSISTANT_ARCHITECTURE.md) — detailed V3 tool-calling design.
 - [V3 delivery](docs/V3_DELIVERY.md), [V4 delivery](docs/V4_DELIVERY.md), and [V4 agentic implementation plan](docs/V4_IMPLEMENTATION_PLAN.md) — local AI status, delivered agent safeguards, and the controlled multi-step workflow.
 - [V5 production-polish plan](docs/V5_PRODUCTION_POLISH_PLAN.md) — optional future hardening.
+- [V9 persistent-agent-memory plan](docs/V9_PERSISTENT_AGENT_MEMORY_PLAN.md) — backend-owned conversation history, safe bounded context, and retention design.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

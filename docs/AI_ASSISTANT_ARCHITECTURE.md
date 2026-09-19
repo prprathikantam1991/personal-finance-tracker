@@ -231,9 +231,11 @@ This LLM-first route is implemented. `LocalAssistantService` sends the tool cata
 V3 conversation is currently **client-session memory**, not a long-term database memory.
 
 - The Angular Assistant page stores displayed messages in memory while the page is open.
-- Each request includes the last 12 messages as `conversation`.
+- Each request includes the newest 12 user/assistant messages as `conversation`.
 - Refreshing the page starts a new conversation.
 - No chat transcript is persisted in SQLite in the current implementation.
+
+The planned persistent-memory design is documented separately in [V9 — Persistent Agent Memory](V9_PERSISTENT_AGENT_MEMORY_PLAN.md). It will introduce a backend-generated `conversationId`, locally persisted history, a bounded prompt window, and explicit user-controlled deletion. The model will not generate, own, or authorize access through a conversation ID.
 
 Before calling the model, the backend resolves only safe, explicit follow-up context from that window. It can carry forward the most recent named month range or merchant when the new question uses an unambiguous reference such as “what about August?”, “same period”, or “overall”. It does not create durable user profiles or infer missing facts.
 

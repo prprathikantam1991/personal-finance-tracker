@@ -20,3 +20,4 @@
 - **V6:** cloud AI provider integrations — assess a targeted Spring AI or LangChain4j migration and optional AWS Bedrock, with explicit opt-in and minimum necessary data sent outside the computer. See GitHub Issue #19.
 - **V7:** multi-user and connected finance — introduce authentication, strict user data isolation, then evaluate optional Plaid connections. See GitHub Issue #20.
 - **V8:** mobile finance experience — decide between a responsive PWA and a native/cross-platform client after user identity and sync boundaries are established. See GitHub Issue #21.
+- **V9:** persistent agent memory — backend-owned local conversation history, bounded session context, and user-controlled retention. See [V9 memory plan](V9_PERSISTENT_AGENT_MEMORY_PLAN.md).

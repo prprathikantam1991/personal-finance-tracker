@@ -92,6 +92,21 @@ public class LocalAssistantService {
             List<JsonNode> calls = new ArrayList<>();
             assistantMessage.path("tool_calls").forEach(calls::add);
             if (calls.isEmpty()) {
+                String requiredTool = nextRequiredTool(question, toolsUsed);
+                if (requiredTool != null) {
+                    try {
+                        JsonNode requiredArguments = normalizeArguments(requiredTool, objectMapper.createObjectNode(), rangeForTool(requiredTool, question, resolvedRange), question);
+                        Object requiredResult = execute(requiredTool, requiredArguments);
+                        String resultJson = json(requiredResult);
+                        if (resultJson.length() > 24_000) return agentStopped("The required finance result was too large to use safely. Please narrow the question.", toolsUsed, steps, resolvedRange, "RESULT_TOO_LARGE");
+                        toolsUsed.add(requiredTool);
+                        steps.add(new AgentStep(round, requiredTool, "Required by request"));
+                        messages.add(message("system", "A required verified result was retrieved for the user's request: " + resultJson + ". Use it with prior verified results and complete every requested part."));
+                        continue;
+                    } catch (ResponseStatusException exception) {
+                        return agentStopped(exception.getReason(), toolsUsed, steps, resolvedRange, "VALIDATION_STOP");
+                    }
+                }
                 if (toolsUsed.isEmpty()) {
                     Optional<AssistantChatResponse> fallback = directAnswer(question, safeConversation);
                     if (fallback.isPresent()) {
@@ -332,11 +347,20 @@ public class LocalAssistantService {
     }
 
     private String requiredToolInstruction(String question) {
+        List<String> required = requiredTools(question);
+        return required.isEmpty() ? "" : " This request requires these tools before a final answer: " + String.join(", then ", required) + ".";
+    }
+
+    private String nextRequiredTool(String question, List<String> toolsUsed) {
+        return requiredTools(question).stream().filter(tool -> !toolsUsed.contains(tool)).findFirst().orElse(null);
+    }
+
+    private List<String> requiredTools(String question) {
         String normalized = question.toLowerCase(Locale.ROOT);
         List<String> required = new ArrayList<>();
         if (comparisonRange(question) != null) required.add("compare_periods");
         if (normalized.contains("merchant")) required.add("get_merchant_spending");
-        return required.isEmpty() ? "" : " This request requires these tools before a final answer: " + String.join(", then ", required) + ".";
+        return required;
     }
 
     private ComparisonRange comparisonRange(String question) {

@@ -66,13 +66,28 @@ public class DashboardService {
             return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), previousTotals.getOrDefault(entry.getKey(), MerchantTotal.empty()).amount());
         }).sorted(java.util.Comparator.comparing(MerchantSpending::amount).reversed()).limit(5).toList();
     }
+    /**
+     * A focused merchant view for assistant analysis. Limiting this at the data
+     * boundary keeps an agent result compact even when a category has years of history.
+     */
+    public List<MerchantSpending> merchantSpending(LocalDate from, LocalDate to, String category) {
+        Map<String, MerchantTotal> current = merchantTotals(from, to, category);
+        return current.entrySet().stream().map(entry -> {
+            MerchantTotal total = entry.getValue();
+            return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), BigDecimal.ZERO);
+        }).sorted(java.util.Comparator.comparing(MerchantSpending::amount).reversed()).limit(10).toList();
+    }
     private Map<String, MerchantTotal> merchantTotals(LocalDate from, LocalDate to) {
+        return merchantTotals(from, to, null);
+    }
+    private Map<String, MerchantTotal> merchantTotals(LocalDate from, LocalDate to, String category) {
         Map<String, MerchantTotal> totals = new HashMap<>();
         jdbcTemplate.query("""
                 SELECT t.description, t.category, t.amount, a.account_type FROM transactions t
                 LEFT JOIN accounts a ON a.id = t.account_id
                 WHERE t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')
                 AND (? IS NULL OR t.transaction_date >= ?) AND (? IS NULL OR t.transaction_date <= ?)
+                AND (? IS NULL OR lower(t.category) = lower(?))
                 """, rs -> {
             String merchant = merchantNormalizer.normalize(rs.getString("description"));
             BigDecimal amount = rs.getBigDecimal("amount");
@@ -80,7 +95,8 @@ public class DashboardService {
             if (spend.signum() <= 0) return;
             MerchantTotal existing = totals.getOrDefault(merchant, MerchantTotal.empty());
             totals.put(merchant, new MerchantTotal(rs.getString("category"), existing.amount().add(spend), existing.count() + 1));
-        }, from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString());
+        }, from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString(),
+                category == null || category.isBlank() ? null : category, category == null || category.isBlank() ? null : category);
         return totals;
     }
     private record MerchantTotal(String category, BigDecimal amount, int count) { static MerchantTotal empty() { return new MerchantTotal("", BigDecimal.ZERO, 0); } }

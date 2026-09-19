@@ -4,6 +4,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
@@ -59,6 +62,22 @@ public class FinanceToolsService {
         return new PeriodComparison(new Period(from, to, dashboardService.summary(from, to)), new Period(compareFrom, compareTo, dashboardService.summary(compareFrom, compareTo)));
     }
 
+    /** A bounded, purpose-built lookup for questions such as “compare groceries in July and August”. */
+    public CategoryComparison compareCategory(String category, LocalDate from, LocalDate to, LocalDate compareFrom, LocalDate compareTo) {
+        BigDecimal selected = categoryAmount(category, from, to);
+        BigDecimal comparison = categoryAmount(category, compareFrom, compareTo);
+        Map<String, MerchantPeriodTotal> merchants = new LinkedHashMap<>();
+        dashboardService.merchantSpending(from, to, category).forEach(item -> merchants.put(item.merchant(), new MerchantPeriodTotal(item.merchant(), item.amount(), BigDecimal.ZERO)));
+        dashboardService.merchantSpending(compareFrom, compareTo, category).forEach(item -> merchants.merge(item.merchant(),
+                new MerchantPeriodTotal(item.merchant(), BigDecimal.ZERO, item.amount()),
+                (left, right) -> new MerchantPeriodTotal(left.merchant(), left.selectedAmount(), right.comparisonAmount())));
+        List<MerchantPeriodTotal> merchantChanges = merchants.values().stream()
+                .map(item -> new MerchantPeriodTotal(item.merchant(), item.selectedAmount(), item.comparisonAmount()))
+                .sorted(Comparator.comparing((MerchantPeriodTotal item) -> item.selectedAmount().subtract(item.comparisonAmount())).reversed())
+                .limit(10).toList();
+        return new CategoryComparison(category, new CategoryPeriod(from, to, selected), new CategoryPeriod(compareFrom, compareTo, comparison), merchantChanges);
+    }
+
     public CreditUtilization creditUtilization() {
         List<AccountOverviewResponse> cards = accountOverviewService.list().stream()
                 .filter(account -> account.accountType() == AccountType.CREDIT_CARD && account.creditLimit() != null && account.creditLimit().signum() > 0).toList();
@@ -80,6 +99,11 @@ public class FinanceToolsService {
     }
 
     private BigDecimal nonNegative(BigDecimal value) { return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO); }
+    private BigDecimal categoryAmount(String category, LocalDate from, LocalDate to) {
+        return dashboardService.summary(from, to).categorySpending().stream()
+                .filter(item -> category.equalsIgnoreCase(item.category()))
+                .map(DashboardSummary.CategoryTotal::amount).findFirst().orElse(BigDecimal.ZERO);
+    }
     private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) { return denominator.signum() <= 0 ? null : numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 1, RoundingMode.HALF_UP); }
     private AccountContext accountContext(AccountOverviewResponse account) {
         return new AccountContext(account.id(), account.name(), account.institution(), account.accountType(), account.lastFour(),
@@ -93,6 +117,10 @@ public class FinanceToolsService {
 
     public record Period(LocalDate from, LocalDate to, DashboardSummary summary) {}
     public record PeriodComparison(Period selectedPeriod, Period comparisonPeriod) {}
+    public record CategoryPeriod(LocalDate from, LocalDate to, BigDecimal amount) {}
+    public record MerchantPeriodTotal(String merchant, BigDecimal selectedAmount, BigDecimal comparisonAmount) {}
+    public record CategoryComparison(String category, CategoryPeriod selectedPeriod, CategoryPeriod comparisonPeriod,
+                                     List<MerchantPeriodTotal> merchants) {}
     public record CreditUtilization(BigDecimal totalLimit, BigDecimal utilized, BigDecimal available, BigDecimal utilizationPercent,
                                     BigDecimal previousUtilizationPercent, int cardCount, int cardsWithPreviousSnapshot, List<CardUtilization> cards) {}
     public record CardUtilization(String accountName, String lastFour, BigDecimal statementBalance, BigDecimal creditLimit,

@@ -7,6 +7,7 @@
 - A bounded sequential agent loop at `POST /api/assistant/agent-runs`.
 - A model receives only an allow-listed catalog of read-only finance tools; it never receives database, SQL, filesystem, shell, or write access.
 - Spring Boot validates every requested tool, applies date and result-size limits, and permits at most three tool rounds.
+- Focused comparison tools return only the category and merchant evidence needed for a “why did this spending change?” question, instead of sending a broad transaction set to the model.
 - Multi-step traces are displayed in Angular as human-readable agent activity.
 - Period context is preserved for date-sensitive calls, optional presentation hints are removed, and redundant undated calls are stopped before they broaden a lookup.
 - LM Studio remains supported; Amazon Bedrock Mantle with Gemma 4 31B has been verified for real sequential tool use.
@@ -15,7 +16,7 @@
 
 ## Evaluation coverage
 
-Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, overly broad date-range rejection, deterministic fallback, and focused clarification for an ambiguous spending question. These tests use mocked tools and model responses; private financial answers are never committed.
+Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, overly broad date-range rejection, focused category comparisons, deterministic fallback, and focused clarification for an ambiguous spending question. These tests use mocked tools and model responses; private financial answers are never committed.
 
 ## Remaining before closure
 

@@ -221,6 +221,7 @@ public class LocalAssistantService {
             case "get_account_overview" -> "account overview";
             case "get_account_history" -> "account history";
             case "compare_periods" -> "period comparison";
+            case "compare_category_spending" -> "category comparison";
             case "search_transactions" -> "transaction search";
             default -> tool;
         };
@@ -282,13 +283,14 @@ public class LocalAssistantService {
             case "get_account_overview" -> financeTools.accountOverview();
             case "get_account_history" -> financeTools.accountHistory(requiredText(args, "accountId"));
             case "compare_periods" -> financeTools.comparePeriods(requiredDate(args, "from"), requiredDate(args, "to"), requiredDate(args, "compareFrom"), requiredDate(args, "compareTo"));
+            case "compare_category_spending" -> financeTools.compareCategory(requiredText(args, "category"), requiredDate(args, "from"), requiredDate(args, "to"), requiredDate(args, "compareFrom"), requiredDate(args, "compareTo"));
             case "search_transactions" -> financeTools.searchTransactions(text(args, "accountId"), date(args, "from"), date(args, "to"), text(args, "category"), text(args, "merchant"));
             default -> throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action. Try again, or reload the model in LM Studio.");
         };
     }
 
     private void validateAgentCall(String name, JsonNode args) {
-        Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "search_transactions");
+        Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "compare_category_spending", "search_transactions");
         if (!tools.contains(name)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action.");
         if (!args.isObject()) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied invalid tool arguments.");
         // All tools are read-only and execute only their documented fields. Some models add
@@ -309,6 +311,7 @@ public class LocalAssistantService {
             case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
             case "get_account_history" -> Set.of("accountId");
             case "compare_periods" -> Set.of("from", "to", "compareFrom", "compareTo");
+            case "compare_category_spending" -> Set.of("category", "from", "to", "compareFrom", "compareTo");
             case "search_transactions" -> Set.of("accountId", "from", "to", "category", "merchant");
             default -> Set.of();
         };
@@ -321,7 +324,7 @@ public class LocalAssistantService {
             if (!normalized.has("to")) normalized.put("to", resolvedRange.to().toString());
         }
         ComparisonRange comparison = comparisonRange(question);
-        if ("compare_periods".equals(name) && comparison != null) {
+        if (("compare_periods".equals(name) || "compare_category_spending".equals(name)) && comparison != null) {
             normalized.put("from", comparison.first().from().toString());
             normalized.put("to", comparison.first().to().toString());
             normalized.put("compareFrom", comparison.second().from().toString());
@@ -385,6 +388,7 @@ public class LocalAssistantService {
                 tool("get_account_overview", "List compact current snapshots for every saved account, including account IDs, balances, card limits, utilization, APR, due dates, and statement dates.", empty()),
                 tool("get_account_history", "Get up to 12 statement snapshots for one account. Call get_account_overview first when an account ID is needed.", Map.of("type", "object", "properties", Map.of("accountId", stringProperty()), "required", List.of("accountId"))),
                 tool("compare_periods", "Compare two explicit date ranges for income, expenses, remittance, cash flow, and category totals.", Map.of("type", "object", "properties", Map.of("from", dateProperty(), "to", dateProperty(), "compareFrom", dateProperty(), "compareTo", dateProperty()), "required", List.of("from", "to", "compareFrom", "compareTo"))),
+                tool("compare_category_spending", "Compare one spending category across two explicit date ranges and return the merchants behind the change. Use this for questions asking why a category rose or fell.", Map.of("type", "object", "properties", Map.of("category", stringProperty(), "from", dateProperty(), "to", dateProperty(), "compareFrom", dateProperty(), "compareTo", dateProperty()), "required", List.of("category", "from", "to", "compareFrom", "compareTo"))),
                 tool("search_transactions", "Find confirmed transactions by optional date range, account, category, or merchant.", Map.of("type", "object", "properties", Map.of("accountId", stringProperty(), "from", dateProperty(), "to", dateProperty(), "category", stringProperty(), "merchant", stringProperty()))));
     }
     private Map<String, Object> tool(String name, String description, Map<String, Object> parameters) { return Map.of("type", "function", "function", Map.of("name", name, "description", description, "parameters", parameters)); }

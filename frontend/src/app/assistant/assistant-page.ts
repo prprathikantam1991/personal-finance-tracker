@@ -41,7 +41,7 @@ export class AssistantPage {
     return detail ?? 'The local assistant could not respond. Please try again.';
   }
   protected toolLabel(tool: string): string {
-    const labels: Record<string, string> = { get_monthly_summary: 'Monthly summary', get_category_spending: 'Category spending', get_merchant_spending: 'Top merchants', get_credit_utilization: 'Credit utilization', get_recurring_activity: 'Recurring activity', get_account_overview: 'Account overview', get_account_history: 'Account history', compare_periods: 'Compare periods', search_transactions: 'Search transactions' };
+    const labels: Record<string, string> = { get_monthly_summary: 'Monthly summary', get_category_spending: 'Category spending', get_merchant_spending: 'Top merchants', get_credit_utilization: 'Credit utilization', get_recurring_activity: 'Recurring activity', get_account_overview: 'Account overview', get_account_history: 'Account history', compare_periods: 'Compare periods', compare_category_spending: 'Compare category spending', search_transactions: 'Search transactions' };
     return labels[tool] ?? tool.replace(/^get_/, '').replaceAll('_', ' ');
   }
 }

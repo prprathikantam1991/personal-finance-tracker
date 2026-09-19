@@ -110,6 +110,24 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void usesTheFocusedCategoryComparisonToolForAWhyDidSpendingChangeQuestion() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"compare_category_spending\",\"arguments\":\"{\\\"category\\\":\\\"Groceries\\\"}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"Groceries increased because Patel Brothers was higher in August.\"}"));
+        when(financeTools.compareCategory(any(), any(), any(), any(), any())).thenReturn(null);
+
+        AgentRunResponse result = service.agentRun("Compare my grocery spending for July and August, then list the merchants responsible for the increase.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("COMPLETED");
+        assertThat(result.toolsUsed()).containsExactly("compare_category_spending");
+        verify(financeTools).compareCategory(org.mockito.ArgumentMatchers.eq("Groceries"),
+                org.mockito.ArgumentMatchers.eq(java.time.LocalDate.of(2026, 7, 1)),
+                org.mockito.ArgumentMatchers.eq(java.time.LocalDate.of(2026, 7, 31)),
+                org.mockito.ArgumentMatchers.eq(java.time.LocalDate.of(2026, 8, 1)),
+                org.mockito.ArgumentMatchers.eq(java.time.LocalDate.of(2026, 8, 31)));
+    }
+
+    @Test
     void stopsBeforeExecutingWhenTheModelRequestsMultipleToolsInOneRound() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
                 + "{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}},"
@@ -143,7 +161,7 @@ class AgentRunEvaluationTest {
     void rejectsAnOverlyLargeDateRangeBeforeExecutingTheRequestedTool() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_category_spending\",\"arguments\":\"{\\\"from\\\":\\\"2024-01-01\\\",\\\"to\\\":\\\"2026-09-01\\\"}\"}}]}"));
 
-        AgentRunResponse result = service.agentRun("Show spending", List.of());
+        AgentRunResponse result = service.agentRun("Show spending for August 2026", List.of());
 
         assertThat(result.stopReason()).isEqualTo("VALIDATION_STOP");
         assertThat(result.steps()).singleElement().satisfies(step -> {

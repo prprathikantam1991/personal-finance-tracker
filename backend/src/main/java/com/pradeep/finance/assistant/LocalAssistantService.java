@@ -66,6 +66,9 @@ public class LocalAssistantService {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
         DateRange resolvedRange = resolveRange(question, safeConversation);
         String resolvedMerchant = resolveMerchant(question, safeConversation);
+        if (needsPeriodClarification(question, resolvedRange)) {
+            return agentStopped("Which period should I use—last month, a specific month, or all saved history?", List.of(), List.of(), resolvedRange, "CLARIFICATION_REQUIRED");
+        }
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)
                 + " For an agent run, request at most one finance tool at a time. After each tool result, decide whether another allowed tool is needed or answer."
@@ -197,10 +200,24 @@ public class LocalAssistantService {
     }
     private List<String> evidence(DateRange range, List<String> tools) {
         List<String> result = new ArrayList<>();
-        result.add("Confirmed saved finance data");
+        result.add("Verified local ledger data");
         if (range != null) result.add("Period: " + range.label());
-        if (!tools.isEmpty()) result.add("Tool: " + String.join(", ", tools));
+        if (!tools.isEmpty()) result.add("Completed lookups: " + tools.stream().map(this::toolLabel).collect(java.util.stream.Collectors.joining(", ")));
         return List.copyOf(result);
+    }
+    private String toolLabel(String tool) {
+        return switch (tool) {
+            case "get_monthly_summary" -> "monthly summary";
+            case "get_category_spending" -> "category spending";
+            case "get_merchant_spending" -> "top merchants";
+            case "get_credit_utilization" -> "credit utilization";
+            case "get_recurring_activity" -> "recurring activity";
+            case "get_account_overview" -> "account overview";
+            case "get_account_history" -> "account history";
+            case "compare_periods" -> "period comparison";
+            case "search_transactions" -> "transaction search";
+            default -> tool;
+        };
     }
     private DateRange lastMonth() { YearMonth month = YearMonth.now().minusMonths(1); return new DateRange(month.atDay(1), month.atEndOfMonth()); }
     private DateRange resolveRange(String question, List<AssistantConversationMessage> conversation) {
@@ -227,6 +244,13 @@ public class LocalAssistantService {
     private boolean usesPriorContext(String question) {
         String normalized = question.toLowerCase(Locale.ROOT);
         return normalized.startsWith("overall") || normalized.contains("what about") || normalized.contains("same period") || normalized.contains("that period") || normalized.contains("that merchant");
+    }
+    private boolean needsPeriodClarification(String question, DateRange range) {
+        if (range != null) return false;
+        String normalized = question.toLowerCase(Locale.ROOT);
+        boolean asksAboutSpending = normalized.matches(".*\\b(spend|spent|spending|expense|expenses|merchant|merchants|category|categories)\\b.*");
+        boolean requestsAllHistory = normalized.contains("overall") || normalized.contains("all time") || normalized.contains("all history") || normalized.contains("ever");
+        return asksAboutSpending && !requestsAllHistory;
     }
     private String cardUtilizationAnswer(FinanceToolsService.CreditUtilization data) {
         String cards = data.cards().stream().map(card -> card.accountName() + ": " + percent(card.utilizationPercent()) + " used (" + money(card.statementBalance()) + " of " + money(card.creditLimit()) + ")").reduce((left, right) -> left + "\n- " + right).orElse("No card snapshots are available.");

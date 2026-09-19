@@ -140,6 +140,17 @@ class AgentRunEvaluationTest {
         verify(financeTools, never()).categorySpending(any(), any());
     }
 
+    @Test
+    void asksForAPeriodBeforeSendingAnAmbiguousSpendingQuestionToTheModel() {
+        AgentRunResponse result = service.agentRun("How much did I spend?", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("CLARIFICATION_REQUIRED");
+        assertThat(result.answer()).contains("Which period should I use");
+        assertThat(result.steps()).isEmpty();
+        verify(localModelClient, never()).complete(any(), any(), anyInt());
+        verify(financeTools, never()).monthlySummary(any(), any());
+    }
+
     private JsonNode response(String message) throws Exception {
         return objectMapper.readTree("{\"choices\":[{\"message\":" + message + "}]}");
     }

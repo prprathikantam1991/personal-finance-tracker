@@ -62,6 +62,23 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void ignoresHarmlessPresentationArgumentsDuringASequentialReadOnlyPlan() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"compare_periods\",\"arguments\":\"{\\\"from\\\":\\\"2026-08-01\\\",\\\"to\\\":\\\"2026-08-31\\\",\\\"compareFrom\\\":\\\"2026-07-01\\\",\\\"compareTo\\\":\\\"2026-07-31\\\"}\"}}]}"),
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"get_merchant_spending\",\"arguments\":\"{\\\"from\\\":\\\"2026-08-01\\\",\\\"to\\\":\\\"2026-08-31\\\",\\\"limit\\\":5}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"August spending and its top merchants are ready.\"}"));
+        when(financeTools.comparePeriods(any(), any(), any(), any())).thenReturn(null);
+        when(financeTools.merchantSpending(any(), any())).thenReturn(List.of());
+
+        AgentRunResponse result = service.agentRun("Compare July and August, then show August merchants.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("COMPLETED");
+        assertThat(result.toolsUsed()).containsExactly("compare_periods", "get_merchant_spending");
+        verify(financeTools).comparePeriods(any(), any(), any(), any());
+        verify(financeTools).merchantSpending(any(), any());
+    }
+
+    @Test
     void stopsBeforeExecutingWhenTheModelRequestsMultipleToolsInOneRound() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
                 + "{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}},"

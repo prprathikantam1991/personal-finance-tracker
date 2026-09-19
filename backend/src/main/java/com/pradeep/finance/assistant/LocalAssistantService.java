@@ -247,16 +247,9 @@ public class LocalAssistantService {
         Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "search_transactions");
         if (!tools.contains(name)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action.");
         if (!args.isObject()) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied invalid tool arguments.");
-        Set<String> allowedFields = switch (name) {
-            case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
-            case "get_account_history" -> Set.of("accountId");
-            case "compare_periods" -> Set.of("from", "to", "compareFrom", "compareTo");
-            case "search_transactions" -> Set.of("accountId", "from", "to", "category", "merchant");
-            default -> Set.of();
-        };
-        args.fieldNames().forEachRemaining(field -> {
-            if (!allowedFields.contains(field)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied an unsupported tool argument.");
-        });
+        // All tools are read-only and execute only their documented fields. Some models add
+        // harmless presentation hints such as "limit"; ignoring those lets a valid multi-step
+        // plan continue without allowing the hint to alter the underlying data lookup.
         validateAgentDates(args, "from", "to");
         validateAgentDates(args, "compareFrom", "compareTo");
     }

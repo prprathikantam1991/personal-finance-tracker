@@ -21,6 +21,7 @@ import org.springframework.http.HttpStatus;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /** Local LM Studio orchestration. The model can only request named read-only finance tools. */
 @Service
@@ -66,12 +67,14 @@ public class LocalAssistantService {
         String resolvedMerchant = resolveMerchant(question, safeConversation);
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)
-                + " For an agent run, request at most one finance tool at a time. After each tool result, decide whether another allowed tool is needed or answer."));
+                + " For an agent run, request at most one finance tool at a time. After each tool result, decide whether another allowed tool is needed or answer."
+                + " When a resolved period is provided, use it for every period-sensitive lookup. Do not request data that an earlier tool result already provided."));
         safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
         messages.add(message("user", question.trim()));
 
         List<String> toolsUsed = new ArrayList<>();
         List<AgentStep> steps = new ArrayList<>();
+        Set<String> completedCalls = new java.util.HashSet<>();
         for (int round = 1; round <= 3; round++) {
             JsonNode modelResponse = complete(messages, true, 160);
             JsonNode assistantMessage = modelResponse.path("choices").path(0).path("message");
@@ -98,8 +101,17 @@ public class LocalAssistantService {
             JsonNode call = calls.getFirst();
             String name = call.path("function").path("name").asText();
             try {
-                JsonNode arguments = parseArguments(call.path("function").path("arguments").asText("{}"));
+                JsonNode suppliedArguments = parseArguments(call.path("function").path("arguments").asText("{}"));
+                if (isUndatedRepeat(name, suppliedArguments, toolsUsed)) {
+                    JsonNode finalResponse = complete(messages, false, 500);
+                    return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+                }
+                JsonNode arguments = normalizeArguments(name, suppliedArguments, resolvedRange);
                 validateAgentCall(name, arguments);
+                if (!completedCalls.add(name + ":" + json(arguments))) {
+                    JsonNode finalResponse = complete(messages, false, 500);
+                    return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+                }
                 Object result = execute(name, arguments);
                 String resultJson = json(result);
                 if (resultJson.length() > 24_000) return agentStopped("The requested finance result was too large to use safely. Please narrow the question.", toolsUsed, steps, resolvedRange, "RESULT_TOO_LARGE");
@@ -252,6 +264,40 @@ public class LocalAssistantService {
         // plan continue without allowing the hint to alter the underlying data lookup.
         validateAgentDates(args, "from", "to");
         validateAgentDates(args, "compareFrom", "compareTo");
+    }
+
+    /**
+     * Models sometimes add UI-only fields (for example, a desired result limit) or omit dates
+     * already resolved from the user's request. Project to the read-only tool schema before
+     * execution so those hints cannot widen or otherwise change a data lookup.
+     */
+    private JsonNode normalizeArguments(String name, JsonNode supplied, DateRange resolvedRange) {
+        if (!supplied.isObject()) return supplied;
+        Set<String> allowedFields = switch (name) {
+            case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
+            case "get_account_history" -> Set.of("accountId");
+            case "compare_periods" -> Set.of("from", "to", "compareFrom", "compareTo");
+            case "search_transactions" -> Set.of("accountId", "from", "to", "category", "merchant");
+            default -> Set.of();
+        };
+        ObjectNode normalized = objectMapper.createObjectNode();
+        allowedFields.forEach(field -> {
+            if (supplied.has(field)) normalized.set(field, supplied.get(field));
+        });
+        if (resolvedRange != null && usesDateRange(name)) {
+            if (!normalized.has("from")) normalized.put("from", resolvedRange.from().toString());
+            if (!normalized.has("to")) normalized.put("to", resolvedRange.to().toString());
+        }
+        return normalized;
+    }
+
+    private boolean usesDateRange(String name) {
+        return Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "search_transactions").contains(name);
+    }
+
+    private boolean isUndatedRepeat(String name, JsonNode suppliedArguments, List<String> toolsUsed) {
+        return usesDateRange(name) && toolsUsed.contains(name) && suppliedArguments.isObject()
+                && !suppliedArguments.has("from") && !suppliedArguments.has("to");
     }
 
     private void validateAgentDates(JsonNode args, String fromField, String toField) {

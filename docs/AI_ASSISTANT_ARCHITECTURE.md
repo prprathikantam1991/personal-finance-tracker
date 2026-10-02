@@ -108,6 +108,7 @@ The public, provider-independent tool layer is exposed below `/api/finance-tools
 | `get_category_spending` | `categorySpending` | Confirmed spending grouped by category |
 | `get_merchant_spending` | `merchantSpending` | Top merchants plus prior-period comparison |
 | `get_credit_utilization` | `creditUtilization` | Combined and per-card limits, balances, available credit, utilization |
+| `get_credit_paydown_plan` | `creditPaydownPlan` | Cent-accurate payment needed to reach a strict overall utilization target, plus transparent card-priority inputs |
 | `get_recurring_activity` | `recurringActivity` | Confirmed repeating monthly patterns |
 | `get_account_overview` | `accountOverview` | Compact current balance, limit, APR, due-date, and statement-date context for saved accounts |
 | `get_account_history` | `accountHistory` | Up to 12 compact statement snapshots for one account, after the model selects its account ID |
@@ -116,6 +117,8 @@ The public, provider-independent tool layer is exposed below `/api/finance-tools
 | `search_transactions` | `searchTransactions` | Confirmed transactions filtered by account, date, category, or merchant |
 
 All tools are read-only. Their methods call established services such as `DashboardService`, `AccountOverviewService`, `RecurringTransactionService`, and `TransactionService`; they do not expose raw SQL to the model. The account overview deliberately returns only answer-oriented fields, and account history is capped at 12 statements so a model receives no more local data than needed.
+
+`get_credit_paydown_plan` is intentionally deterministic: Spring Boot calculates the largest cent balance strictly below the requested percentage, then reports the minimum payment required. The model can explain this verified result, but cannot alter the calculation or make a payment. Card ordering is utilization-first, with APR and promotional-APR expiry used as tie-break information; it is a transparent utilization plan, not personalized financial advice.
 
 ## 6. Tool definition generation
 

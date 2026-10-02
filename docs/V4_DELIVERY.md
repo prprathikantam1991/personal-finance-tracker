@@ -13,10 +13,11 @@
 - LM Studio remains supported; Amazon Bedrock Mantle with Gemma 4 31B has been verified for real sequential tool use.
 - The Mantle adapter supports an optional provider reasoning-effort setting, enabling a like-for-like evaluation of Gemma 4 E2B with `BEDROCK_REASONING_EFFORT=high`.
 - Rolling local logs record safe operational metadata without recording prompts, answers, statements, transaction rows, or credentials.
+- The `get_credit_paydown_plan` tool performs a cent-accurate, read-only calculation for strict utilization targets. For example, “below 10%” uses a maximum projected balance of $5,799.99—not $5,800.00—so the resulting utilization is truly below the target. It ranks cards by utilization, then current APR and promotional-APR expiry, while leaving the final payment decision with the user.
 
 ## Evaluation coverage
 
-Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, overly broad date-range rejection, focused category comparisons, deterministic fallback, and focused clarification for an ambiguous spending question. These tests use mocked tools and model responses; private financial answers are never committed.
+Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, overly broad date-range rejection, focused category comparisons, deterministic fallback, focused clarification for an ambiguous spending question, and selection of the strict-target credit-paydown tool. Calculator unit tests cover cent boundaries, unavailable card limits, and accounts already below a target. These tests use mocked tools and model responses; private financial answers are never committed.
 
 ## Remaining before closure
 

@@ -90,6 +90,54 @@ public class FinanceToolsService {
         return new CreditUtilization(limit, used, limit.subtract(used).max(BigDecimal.ZERO), percent(used, limit), percent(previousUsed, previousLimit), cards.size(), previousCards.size(), byCard);
     }
 
+    /**
+     * Calculates a cent-accurate payment for a strict utilization target. This is a
+     * transparent calculation over saved card snapshots, not model-generated math
+     * or a payment action.
+     */
+    public CreditPaydownPlan creditPaydownPlan(BigDecimal targetUtilizationPercent) {
+        if (targetUtilizationPercent == null || targetUtilizationPercent.signum() <= 0
+                || targetUtilizationPercent.compareTo(BigDecimal.valueOf(100)) > 0) {
+            throw new IllegalArgumentException("Target utilization must be greater than 0 and no more than 100.");
+        }
+        List<AccountOverviewResponse> cards = accountOverviewService.list().stream()
+                .filter(account -> account.accountType() == AccountType.CREDIT_CARD && account.creditLimit() != null
+                        && account.creditLimit().signum() > 0)
+                .sorted(Comparator.comparing((AccountOverviewResponse account) -> precisePercent(nonNegative(account.statementBalance()), account.creditLimit()),
+                                Comparator.nullsLast(Comparator.reverseOrder()))
+                        .thenComparing(account -> valueOrZero(account.currentApr()), Comparator.reverseOrder())
+                        .thenComparing(this::promotionExpiry))
+                .toList();
+        BigDecimal totalLimit = cards.stream().map(AccountOverviewResponse::creditLimit).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal utilized = cards.stream().map(account -> nonNegative(account.statementBalance())).reduce(BigDecimal.ZERO, BigDecimal::add);
+        if (totalLimit.signum() <= 0) {
+            return new CreditPaydownPlan(false, "No saved credit-card limits are available for a utilization plan.",
+                    targetUtilizationPercent, totalLimit, utilized, null, null, BigDecimal.ZERO, null, List.of());
+        }
+
+        // Payments settle in cents. The largest cent balance strictly below the threshold
+        // is ceil(limit * target / 100) - $0.01. This makes "below 10%" exact, not "10%".
+        BigDecimal targetBalance = totalLimit.multiply(targetUtilizationPercent).divide(BigDecimal.valueOf(100), 8, RoundingMode.HALF_UP);
+        BigDecimal maximumBalanceBelowTarget = targetBalance.setScale(2, RoundingMode.CEILING).subtract(BigDecimal.valueOf(0.01)).max(BigDecimal.ZERO);
+        BigDecimal requiredPayment = utilized.subtract(maximumBalanceBelowTarget).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal projectedUtilized = utilized.subtract(requiredPayment).max(BigDecimal.ZERO);
+        BigDecimal remainingPayment = requiredPayment;
+        List<CardPaydownPriority> priorities = new java.util.ArrayList<>();
+        for (AccountOverviewResponse card : cards) {
+            BigDecimal balance = nonNegative(card.statementBalance());
+            BigDecimal suggestedPayment = balance.min(remainingPayment).setScale(2, RoundingMode.HALF_UP);
+            remainingPayment = remainingPayment.subtract(suggestedPayment);
+            priorities.add(new CardPaydownPriority(card.name(), card.lastFour(), balance, card.creditLimit(),
+                    precisePercent(balance, card.creditLimit()), card.currentApr(), card.promotionalApr(), card.promotionalAprExpiresOn(),
+                    suggestedPayment, "Ranked by highest utilization, then current APR, then promotional APR expiry."));
+        }
+        String status = requiredPayment.signum() == 0
+                ? "Current utilization is already strictly below the requested target."
+                : "Pay the calculated amount to reach a balance strictly below the requested utilization target.";
+        return new CreditPaydownPlan(true, status, targetUtilizationPercent, totalLimit, utilized, percent(utilized, totalLimit),
+                maximumBalanceBelowTarget, requiredPayment, precisePercent(projectedUtilized, totalLimit), priorities);
+    }
+
     public List<TransactionResponse> searchTransactions(String accountId, LocalDate from, LocalDate to, String category, String merchant) {
         return transactionService.list(accountId, from, to).stream()
                 .filter(transaction -> "CONFIRMED".equals(transaction.status()))
@@ -99,12 +147,19 @@ public class FinanceToolsService {
     }
 
     private BigDecimal nonNegative(BigDecimal value) { return value == null ? BigDecimal.ZERO : value.max(BigDecimal.ZERO); }
+    private BigDecimal valueOrZero(BigDecimal value) { return value == null ? BigDecimal.ZERO : value; }
+    private LocalDate promotionExpiry(AccountOverviewResponse account) {
+        if (account.promotionalAprExpiresOn() == null || account.promotionalAprExpiresOn().isBlank()) return LocalDate.MAX;
+        try { return LocalDate.parse(account.promotionalAprExpiresOn()); }
+        catch (java.time.format.DateTimeParseException ignored) { return LocalDate.MAX; }
+    }
     private BigDecimal categoryAmount(String category, LocalDate from, LocalDate to) {
         return dashboardService.summary(from, to).categorySpending().stream()
                 .filter(item -> category.equalsIgnoreCase(item.category()))
                 .map(DashboardSummary.CategoryTotal::amount).findFirst().orElse(BigDecimal.ZERO);
     }
     private BigDecimal percent(BigDecimal numerator, BigDecimal denominator) { return denominator.signum() <= 0 ? null : numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 1, RoundingMode.HALF_UP); }
+    private BigDecimal precisePercent(BigDecimal numerator, BigDecimal denominator) { return denominator.signum() <= 0 ? null : numerator.multiply(BigDecimal.valueOf(100)).divide(denominator, 4, RoundingMode.DOWN); }
     private AccountContext accountContext(AccountOverviewResponse account) {
         return new AccountContext(account.id(), account.name(), account.institution(), account.accountType(), account.lastFour(),
                 account.statementBalance(), account.creditLimit(), account.availableCredit(), account.creditUtilizationPercent(),
@@ -125,6 +180,13 @@ public class FinanceToolsService {
                                     BigDecimal previousUtilizationPercent, int cardCount, int cardsWithPreviousSnapshot, List<CardUtilization> cards) {}
     public record CardUtilization(String accountName, String lastFour, BigDecimal statementBalance, BigDecimal creditLimit,
                                   BigDecimal availableCredit, BigDecimal utilizationPercent, BigDecimal previousUtilizationPercent) {}
+    public record CreditPaydownPlan(boolean planningAvailable, String status, BigDecimal targetUtilizationPercent,
+                                    BigDecimal totalLimit, BigDecimal currentUtilized, BigDecimal currentUtilizationPercent,
+                                    BigDecimal maximumUtilizedBelowTarget, BigDecimal requiredPayment,
+                                    BigDecimal projectedUtilizationPercent, List<CardPaydownPriority> cardPriorities) {}
+    public record CardPaydownPriority(String accountName, String lastFour, BigDecimal currentBalance, BigDecimal creditLimit,
+                                      BigDecimal utilizationPercent, BigDecimal currentApr, BigDecimal promotionalApr,
+                                      String promotionalAprExpiresOn, BigDecimal suggestedPayment, String priorityReason) {}
     public record AccountContext(String id, String name, String institution, AccountType accountType, String lastFour,
                                  BigDecimal statementBalance, BigDecimal creditLimit, BigDecimal availableCredit, BigDecimal creditUtilizationPercent,
                                  BigDecimal currentApr, BigDecimal promotionalApr, String promotionalAprExpiresOn, BigDecimal minimumPayment,

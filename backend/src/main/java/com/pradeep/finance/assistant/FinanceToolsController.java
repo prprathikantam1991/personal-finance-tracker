@@ -1,6 +1,7 @@
 package com.pradeep.finance.assistant;
 
 import java.time.LocalDate;
+import java.math.BigDecimal;
 import java.util.List;
 
 import org.springframework.format.annotation.DateTimeFormat;
@@ -29,6 +30,7 @@ public class FinanceToolsController {
     @GetMapping("/accounts") public List<FinanceToolsService.AccountContext> accountOverview() { return financeToolsService.accountOverview(); }
     @GetMapping("/accounts/{accountId}/history") public FinanceToolsService.AccountHistoryContext accountHistory(@PathVariable String accountId) { return financeToolsService.accountHistory(accountId); }
     @GetMapping("/credit-utilization") public FinanceToolsService.CreditUtilization creditUtilization() { return financeToolsService.creditUtilization(); }
+    @GetMapping("/credit-paydown-plan") public FinanceToolsService.CreditPaydownPlan creditPaydownPlan(@RequestParam BigDecimal targetUtilizationPercent) { return financeToolsService.creditPaydownPlan(targetUtilizationPercent); }
     @GetMapping("/compare-periods") public FinanceToolsService.PeriodComparison comparePeriods(@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate compareFrom, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate compareTo) { return financeToolsService.comparePeriods(from, to, compareFrom, compareTo); }
     @GetMapping("/transactions") public List<TransactionResponse> searchTransactions(@RequestParam(required = false) String accountId, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from, @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to, @RequestParam(required = false) String category, @RequestParam(required = false) String merchant) { return financeToolsService.searchTransactions(accountId, from, to, category, merchant); }
 }

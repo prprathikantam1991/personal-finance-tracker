@@ -158,6 +158,20 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void executesTheDeterministicCreditPaydownToolForAStrictTargetQuestion() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_paydown_plan\",\"arguments\":\"{\\\"targetUtilizationPercent\\\":10}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"Pay $799.21 to get strictly below 10%.\"}"));
+        when(financeTools.creditPaydownPlan(BigDecimal.TEN)).thenReturn(null);
+
+        AgentRunResponse result = service.agentRun("How much should I pay to get my overall utilization below 10%?", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("COMPLETED");
+        assertThat(result.toolsUsed()).containsExactly("get_credit_paydown_plan");
+        verify(financeTools).creditPaydownPlan(BigDecimal.TEN);
+    }
+
+    @Test
     void rejectsAnOverlyLargeDateRangeBeforeExecutingTheRequestedTool() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_category_spending\",\"arguments\":\"{\\\"from\\\":\\\"2024-01-01\\\",\\\"to\\\":\\\"2026-09-01\\\"}\"}}]}"));
 

@@ -196,7 +196,7 @@ public class LocalAssistantService {
 
     private String systemPrompt() {
         DateRange lastMonth = lastMonth();
-        return "You are the Personal Finance Tracker assistant. For factual finance questions, use available finance tools before answering. Use only tool results for facts. Today is " + LocalDate.now() + ". 'Last month' means " + lastMonth.label() + "; do not ask the user to provide those dates. 'Overall' means all saved history unless the question is about credit utilization. When a month name has no year, use the current year. Never invent transactions, values, dates, or financial advice. Tools are read-only. Complete every requested part of the question. For a comparison plus merchants request, give a concise takeaway, the comparison, and the requested merchant amounts; never end mid-table or omit a requested section.";
+        return "You are the Personal Finance Tracker assistant. For factual finance questions, use available finance tools before answering. Use only tool results for facts. Today is " + LocalDate.now() + ". 'Last month' means " + lastMonth.label() + "; do not ask the user to provide those dates. 'Overall' means all saved history unless the question is about credit utilization. When a month name has no year, use the current year. For questions about a target credit utilization or how much to pay to reach it, call get_credit_paydown_plan with the requested percentage. Never invent transactions, values, dates, or financial advice. Tools are read-only. Complete every requested part of the question. For a comparison plus merchants request, give a concise takeaway, the comparison, and the requested merchant amounts; never end mid-table or omit a requested section.";
     }
     private String contextPrompt(DateRange range, String merchant) {
         List<String> context = new ArrayList<>();
@@ -217,6 +217,7 @@ public class LocalAssistantService {
             case "get_category_spending" -> "category spending";
             case "get_merchant_spending" -> "top merchants";
             case "get_credit_utilization" -> "credit utilization";
+            case "get_credit_paydown_plan" -> "credit paydown plan";
             case "get_recurring_activity" -> "recurring activity";
             case "get_account_overview" -> "account overview";
             case "get_account_history" -> "account history";
@@ -279,6 +280,7 @@ public class LocalAssistantService {
             case "get_category_spending" -> financeTools.categorySpending(date(args, "from"), date(args, "to"));
             case "get_merchant_spending" -> financeTools.merchantSpending(date(args, "from"), date(args, "to"));
             case "get_credit_utilization" -> financeTools.creditUtilization();
+            case "get_credit_paydown_plan" -> financeTools.creditPaydownPlan(requiredDecimal(args, "targetUtilizationPercent"));
             case "get_recurring_activity" -> financeTools.recurringActivity();
             case "get_account_overview" -> financeTools.accountOverview();
             case "get_account_history" -> financeTools.accountHistory(requiredText(args, "accountId"));
@@ -290,7 +292,7 @@ public class LocalAssistantService {
     }
 
     private void validateAgentCall(String name, JsonNode args) {
-        Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "compare_category_spending", "search_transactions");
+        Set<String> tools = Set.of("get_monthly_summary", "get_category_spending", "get_merchant_spending", "get_credit_utilization", "get_credit_paydown_plan", "get_recurring_activity", "get_account_overview", "get_account_history", "compare_periods", "compare_category_spending", "search_transactions");
         if (!tools.contains(name)) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model requested an unsupported action.");
         if (!args.isObject()) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "The local model supplied invalid tool arguments.");
         // All tools are read-only and execute only their documented fields. Some models add
@@ -298,6 +300,12 @@ public class LocalAssistantService {
         // plan continue without allowing the hint to alter the underlying data lookup.
         validateAgentDates(args, "from", "to");
         validateAgentDates(args, "compareFrom", "compareTo");
+        if ("get_credit_paydown_plan".equals(name)) {
+            BigDecimal target = requiredDecimal(args, "targetUtilizationPercent");
+            if (target.signum() <= 0 || target.compareTo(BigDecimal.valueOf(100)) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Target utilization must be greater than 0 and no more than 100.");
+            }
+        }
     }
 
     /**
@@ -310,6 +318,7 @@ public class LocalAssistantService {
         Set<String> allowedFields = switch (name) {
             case "get_monthly_summary", "get_category_spending", "get_merchant_spending" -> Set.of("from", "to");
             case "get_account_history" -> Set.of("accountId");
+            case "get_credit_paydown_plan" -> Set.of("targetUtilizationPercent");
             case "compare_periods" -> Set.of("from", "to", "compareFrom", "compareTo");
             case "compare_category_spending" -> Set.of("category", "from", "to", "compareFrom", "compareTo");
             case "search_transactions" -> Set.of("accountId", "from", "to", "category", "merchant");
@@ -384,6 +393,7 @@ public class LocalAssistantService {
                 tool("get_category_spending", "Get confirmed spending totals by category for a date range.", dates()),
                 tool("get_merchant_spending", "Get the top merchants and spending for a date range.", dates()),
                 tool("get_credit_utilization", "Get current combined credit limit, utilization, availability, and prior-statement comparison.", empty()),
+                tool("get_credit_paydown_plan", "Calculate the exact cent-accurate payment needed to bring overall credit utilization strictly below a requested percentage. This is a read-only utilization plan, not payment advice or a payment action.", Map.of("type", "object", "properties", Map.of("targetUtilizationPercent", Map.of("type", "number", "description", "Requested overall utilization percentage, greater than 0 and at most 100")), "required", List.of("targetUtilizationPercent"))),
                 tool("get_recurring_activity", "Get confirmed recurring monthly activity detected from saved transaction history.", empty()),
                 tool("get_account_overview", "List compact current snapshots for every saved account, including account IDs, balances, card limits, utilization, APR, due dates, and statement dates.", empty()),
                 tool("get_account_history", "Get up to 12 statement snapshots for one account. Call get_account_overview first when an account ID is needed.", Map.of("type", "object", "properties", Map.of("accountId", stringProperty()), "required", List.of("accountId"))),
@@ -402,6 +412,12 @@ public class LocalAssistantService {
     private String json(Object value) { try { return objectMapper.writeValueAsString(value); } catch (JsonProcessingException exception) { throw new IllegalStateException("Could not prepare finance tool result.", exception); } }
     private LocalDate date(JsonNode args, String field) { String value = text(args, field); return value == null ? null : LocalDate.parse(value); }
     private LocalDate requiredDate(JsonNode args, String field) { LocalDate value = date(args, field); if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + "."); return value; }
+    private BigDecimal requiredDecimal(JsonNode args, String field) {
+        String value = text(args, field);
+        if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + ".");
+        try { return new BigDecimal(value); }
+        catch (NumberFormatException exception) { throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs a numeric " + field + "."); }
+    }
     private String text(JsonNode args, String field) { String value = args.path(field).asText("").trim(); return value.isBlank() ? null : value; }
     private String requiredText(JsonNode args, String field) { String value = text(args, field); if (value == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Assistant tool needs " + field + "."); return value; }
 }

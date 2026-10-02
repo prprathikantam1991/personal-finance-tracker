@@ -118,6 +118,28 @@ Both libraries can reduce plumbing for a sliding message window and persistent m
 
 The V9 implementation should first define the project-owned conversation schema, retention policy, ownership model, and prompt boundaries. A later V6 library migration can adapt that schema to Spring AI or LangChain4j without allowing a framework to determine financial-data access or privacy behavior.
 
+## Industry and open-source reference implementations
+
+V9 follows established application architecture rather than treating an LLM as a database. The projects below are public, production-oriented references for distinct parts of the design. They are learning references, not dependencies and not code to copy wholesale.
+
+| Reference | What it demonstrates | V9 adoption | Deliberately deferred |
+| --- | --- | --- | --- |
+| [Open WebUI memory](https://docs.openwebui.com/features/chat-conversations/memory/) ([source](https://github.com/open-webui/open-webui)) | Self-hosted, user-scoped persisted memories; user edit/delete controls; bounded prompt-injection budgets; optional model-managed memory actions. | Local SQLite persistence, bounded context, and clear user controls. | Automatic background memory extraction and model-directed writes. |
+| [Letta memory architecture](https://github.com/letta-ai/skills/blob/main/letta/agent-development/references/memory-architecture.md) ([source](https://github.com/letta-ai/letta)) | A clear split between recent conversation context, durable core memory, and searchable archival memory. | Separate transcript, compact session context, and future explicit preferences. | Vector/archival retrieval and agent-managed memory blocks. |
+| [LibreChat user memory](https://www.librechat.ai/docs/features/memory) ([source](https://github.com/danny-avila/LibreChat)) | User- and agent-scoped memory partitions, memory tools, configurable context windows, and deployment-level access controls. | The future ownership boundary and explicit preference-memory tools. | Multi-user partitions and authorization until V7 authentication. |
+
+### Interview-ready architecture mapping
+
+| This tracker now | Scaled production equivalent | Why the separation matters |
+| --- | --- | --- |
+| SQLite conversation tables | Managed relational or document persistence | The application, not the model, owns lifecycle, deletion, and access control. |
+| Recent message window plus `structured_context` | Token-aware context management and summarization/compaction pipeline | Keeps latency, cloud cost, and accidental data exposure bounded. |
+| Confirmed ledger queried through read-only tools | Operational source systems behind least-privilege APIs | A model answer is grounded in current verified data rather than recalled text. |
+| Future explicit `assistant_preferences` | User-scoped durable personalization store | Personalization is visible, editable, and distinct from financial truth. |
+| V4 tool traces and answer evidence | Observability, audit trail, and evaluation telemetry | A person can inspect which verified data supported an answer. |
+
+In an interview, this can be described as a **stateful application around a stateless LLM**: Spring Boot owns durable state and policy; the model receives only bounded context and allow-listed read-only tools; SQLite financial records remain the authoritative ledger.
+
 ## Acceptance criteria
 
 - A backend-generated conversation survives a browser refresh.

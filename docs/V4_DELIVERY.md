@@ -17,7 +17,7 @@
 
 ## Evaluation coverage
 
-Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, overly broad date-range rejection, focused category comparisons, deterministic fallback, focused clarification for an ambiguous spending question, and selection of the strict-target credit-paydown tool. Calculator unit tests cover cent boundaries, unavailable card limits, and accounts already below a target. These tests use mocked tools and model responses; private financial answers are never committed.
+Synthetic evaluations verify successful sequential calls, optional tool hints, period preservation, duplicate prevention, multiple-call rejection, unknown-tool rejection, invalid-target rejection, overly broad date-range rejection, tool-round budget enforcement, focused category comparisons, deterministic fallback, focused clarification for an ambiguous spending question, and selection of the strict-target credit-paydown tool. Calculator unit tests cover cent boundaries, unavailable card limits, and accounts already below a target. These tests use mocked tools and model responses; private financial answers are never committed. See [Agent evaluation and safety checks](AGENT_EVALUATION.md) for the scenario matrix, observability policy, and model-change checklist.
 
 ## Remaining before closure
 

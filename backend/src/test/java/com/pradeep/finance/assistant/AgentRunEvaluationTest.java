@@ -186,6 +186,57 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void rejectsAnUnknownToolBeforeItCanReachTheFinanceService() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"delete_all_transactions\",\"arguments\":\"{}\"}}]}"));
+
+        AgentRunResponse result = service.agentRun("Delete all my transactions", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("VALIDATION_STOP");
+        assertThat(result.steps()).singleElement().satisfies(step -> {
+            assertThat(step.tool()).isEqualTo("delete_all_transactions");
+            assertThat(step.outcome()).isEqualTo("Rejected");
+        });
+        verify(financeTools, never()).creditUtilization();
+        verify(financeTools, never()).accountOverview();
+    }
+
+    @Test
+    void rejectsANonNumericCreditPaydownTargetBeforeCalculation() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_paydown_plan\",\"arguments\":\"{\\\"targetUtilizationPercent\\\":\\\"ten\\\"}\"}}]}"));
+
+        AgentRunResponse result = service.agentRun("Bring my utilization below ten percent", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("VALIDATION_STOP");
+        assertThat(result.steps()).singleElement().satisfies(step -> {
+            assertThat(step.tool()).isEqualTo("get_credit_paydown_plan");
+            assertThat(step.outcome()).isEqualTo("Rejected");
+        });
+        verify(financeTools, never()).creditPaydownPlan(any());
+    }
+
+    @Test
+    void stopsAfterThreeValidatedToolRoundsAndRequestsAGroundedFinalAnswer() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}}]}"),
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-2\",\"type\":\"function\",\"function\":{\"name\":\"get_recurring_activity\",\"arguments\":\"{}\"}}]}"),
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-3\",\"type\":\"function\",\"function\":{\"name\":\"get_account_overview\",\"arguments\":\"{}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"Here is the grounded three-step summary.\"}"));
+        when(financeTools.creditUtilization()).thenReturn(null);
+        when(financeTools.recurringActivity()).thenReturn(List.of());
+        when(financeTools.accountOverview()).thenReturn(List.of());
+
+        AgentRunResponse result = service.agentRun("Review utilization, recurring activity, and my accounts.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("TOOL_BUDGET_REACHED");
+        assertThat(result.answer()).contains("grounded three-step summary");
+        assertThat(result.steps()).extracting(AgentStep::tool)
+                .containsExactly("get_credit_utilization", "get_recurring_activity", "get_account_overview");
+        verify(localModelClient, times(4)).complete(any(), any(), anyInt());
+    }
+
+    @Test
     void asksForAPeriodBeforeSendingAnAmbiguousSpendingQuestionToTheModel() {
         AgentRunResponse result = service.agentRun("How much did I spend?", List.of());
 

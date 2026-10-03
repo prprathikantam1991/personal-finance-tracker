@@ -25,6 +25,9 @@ class AssistantControllerTest {
     @MockitoBean
     private LocalAssistantService localAssistantService;
 
+    @MockitoBean
+    private ConversationService conversationService;
+
     @Test
     void returnsGatewayTimeoutWhenTheLocalModelIsSlow() throws Exception {
         when(localAssistantService.chat(any(), any()))

@@ -49,17 +49,21 @@ public class LocalAssistantService {
     }
 
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation) {
+        return chat(question, conversation, ConversationContext.empty());
+    }
+
+    public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
-        DateRange resolvedRange = resolveRange(question, safeConversation);
-        String resolvedMerchant = resolveMerchant(question, safeConversation);
+        DateRange resolvedRange = resolveRange(question, safeConversation, savedContext);
+        String resolvedMerchant = resolveMerchant(question, safeConversation, savedContext);
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)));
         safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
         messages.add(message("user", question.trim()));
         try {
-            return modelFirstAnswer(question, safeConversation, messages, resolvedRange);
+            return modelFirstAnswer(question, safeConversation, messages, resolvedRange, savedContext);
         } catch (ResponseStatusException exception) {
-            return directAnswer(question, safeConversation)
+            return directAnswer(question, safeConversation, savedContext)
                     .orElseThrow(() -> exception);
         }
     }
@@ -69,9 +73,13 @@ public class LocalAssistantService {
      * financial lookup is validated and recorded before the next decision is made.
      */
     public AgentRunResponse agentRun(String question, List<AssistantConversationMessage> conversation) {
+        return agentRun(question, conversation, ConversationContext.empty());
+    }
+
+    public AgentRunResponse agentRun(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
-        DateRange resolvedRange = resolveRange(question, safeConversation);
-        String resolvedMerchant = resolveMerchant(question, safeConversation);
+        DateRange resolvedRange = resolveRange(question, safeConversation, savedContext);
+        String resolvedMerchant = resolveMerchant(question, safeConversation, savedContext);
         if (needsPeriodClarification(question, resolvedRange)) {
             return agentStopped("Which period should I use—last month, a specific month, or all saved history?", List.of(), List.of(), resolvedRange, "CLARIFICATION_REQUIRED");
         }
@@ -92,7 +100,7 @@ public class LocalAssistantService {
             assistantMessage.path("tool_calls").forEach(calls::add);
             if (calls.isEmpty()) {
                 if (toolsUsed.isEmpty()) {
-                    Optional<AssistantChatResponse> fallback = directAnswer(question, safeConversation);
+                    Optional<AssistantChatResponse> fallback = directAnswer(question, safeConversation, savedContext);
                     if (fallback.isPresent()) {
                         AssistantChatResponse answer = fallback.get();
                         List<AgentStep> fallbackSteps = answer.toolsUsed().stream()
@@ -143,13 +151,13 @@ public class LocalAssistantService {
                 List.copyOf(tools), List.copyOf(steps), stopReason, model, evidence(range, tools));
     }
 
-    private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange) {
+    private AssistantChatResponse modelFirstAnswer(String question, List<AssistantConversationMessage> conversation, List<Map<String, Object>> messages, DateRange resolvedRange, ConversationContext savedContext) {
         JsonNode first = complete(messages, true, toolSelectionMaxTokens);
         JsonNode assistantMessage = first.path("choices").path(0).path("message");
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);
         if (calls.isEmpty()) {
-            return directAnswer(question, conversation)
+            return directAnswer(question, conversation, savedContext)
                     .orElse(new AssistantChatResponse(content(assistantMessage), List.of(), model, "MODEL_RESPONSE", List.of("No finance-data tool was used for this response.")));
         }
 
@@ -167,8 +175,11 @@ public class LocalAssistantService {
     }
 
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation) {
+        return directAnswer(question, conversation, ConversationContext.empty());
+    }
+    private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         String normalized = question.toLowerCase(Locale.ROOT);
-        DateRange range = resolveRange(question, conversation);
+        DateRange range = resolveRange(question, conversation, savedContext);
         if (normalized.contains("credit utilization")) {
             FinanceToolsService.CreditUtilization data = financeTools.creditUtilization();
             boolean perCard = normalized.contains("each card") || normalized.contains("by card") || normalized.contains("per card");
@@ -183,7 +194,7 @@ public class LocalAssistantService {
                 return Optional.of(new AssistantChatResponse("Confirmed spending by category for " + range.label() + ":\n- " + items, List.of("get_category_spending"), model, "FALLBACK", evidence(range, List.of("get_category_spending"))));
             }
         }
-        String merchant = resolveMerchant(question, conversation);
+        String merchant = resolveMerchant(question, conversation, savedContext);
         if (merchant != null) {
             List<com.pradeep.finance.transaction.TransactionResponse> transactions = financeTools.searchTransactions(null, range == null ? null : range.from(), range == null ? null : range.to(), null, merchant);
             BigDecimal spending = transactions.stream().map(item -> item.accountType() == com.pradeep.finance.account.AccountType.CREDIT_CARD ? item.amount() : item.amount().negate()).filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -229,11 +240,20 @@ public class LocalAssistantService {
     }
     private DateRange lastMonth() { YearMonth month = YearMonth.now().minusMonths(1); return new DateRange(month.atDay(1), month.atEndOfMonth()); }
     private DateRange resolveRange(String question, List<AssistantConversationMessage> conversation) {
+        return resolveRange(question, conversation, ConversationContext.empty());
+    }
+    private DateRange resolveRange(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         DateRange explicit = dateRange(question);
         if (explicit != null) return explicit;
         if (question.toLowerCase(Locale.ROOT).contains("last month")) return lastMonth();
         if (!usesPriorContext(question)) return null;
-        return conversation.stream().filter(item -> "user".equals(item.role())).map(item -> dateRange(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+        DateRange fromHistory = conversation.stream().filter(item -> "user".equals(item.role())).map(item -> dateRange(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+        if (fromHistory != null) return fromHistory;
+        if (savedContext != null && savedContext.from() != null && savedContext.to() != null) {
+            try { return new DateRange(LocalDate.parse(savedContext.from()), LocalDate.parse(savedContext.to())); }
+            catch (java.time.format.DateTimeParseException ignored) { return null; }
+        }
+        return null;
     }
     private DateRange dateRange(String question) {
         Matcher matcher = MONTH_NAME.matcher(question);
@@ -245,9 +265,13 @@ public class LocalAssistantService {
     private int monthNumber(String name) { return java.time.Month.valueOf(name.toUpperCase(Locale.ROOT)).getValue(); }
     private String merchant(String question) { Matcher matcher = MERCHANT.matcher(question.trim()); return matcher.find() ? matcher.group(1).trim() : null; }
     private String resolveMerchant(String question, List<AssistantConversationMessage> conversation) {
+        return resolveMerchant(question, conversation, ConversationContext.empty());
+    }
+    private String resolveMerchant(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         String explicit = merchant(question);
         if (explicit != null || !usesPriorContext(question)) return explicit;
-        return conversation.stream().filter(item -> "user".equals(item.role())).map(item -> merchant(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+        String fromHistory = conversation.stream().filter(item -> "user".equals(item.role())).map(item -> merchant(item.text())).filter(java.util.Objects::nonNull).reduce((first, second) -> second).orElse(null);
+        return fromHistory != null ? fromHistory : savedContext == null ? null : savedContext.merchant();
     }
     private boolean usesPriorContext(String question) {
         String normalized = question.toLowerCase(Locale.ROOT);

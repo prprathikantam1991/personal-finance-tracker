@@ -1,6 +1,6 @@
 # V9 — Persistent Agent Memory
 
-**Status:** planned
+**Status:** in progress — the first local persistence slice adds SQLite conversation tables, backend-owned IDs, bounded recent-message loading, structured session context, and Assistant UI controls. Follow-up work will add dedicated persistence tests and complete end-to-end restoration validation.
 
 ## Goal
 

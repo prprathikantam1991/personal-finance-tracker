@@ -115,6 +115,16 @@ $env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-api-key"
 
 The defaults start Bedrock Mantle with `google.gemma-4-e2b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. To preview the effective configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. You can select another model without editing source code, for example `./scripts/start-backend.ps1 -Model google.gemma-4-31b -ReasoningEffort ''`.
 
+### Spring AI LM Studio evaluation (V6, opt-in)
+
+The established Assistant runtime remains the default. To evaluate the new Spring AI `ChatClient` path against a tool-capable model loaded in LM Studio, use:
+
+```powershell
+./scripts/start-backend.ps1 -Provider lm-studio -Runtime spring-ai-lm-studio -Model your-loaded-model-id
+```
+
+This enables Spring AI only for that process. It connects to LM Studio at `http://localhost:1234`, sends the same allow-listed read-only tools, and returns the same Assistant API shape and evidence. Stop the process and start normally (or use `-Runtime custom`) to return immediately to the proven V4 runtime. The Spring AI runtime remains an evaluation path until the V4 verification prompts pass with equivalent answers and tool traces.
+
 ## Verify changes
 
 ```powershell
@@ -134,4 +144,5 @@ cd frontend; npm run build
 - [V5 production-polish plan](docs/V5_PRODUCTION_POLISH_PLAN.md) — optional future hardening.
 - [V9 persistent-agent-memory plan](docs/V9_PERSISTENT_AGENT_MEMORY_PLAN.md) — backend-owned conversation history, safe bounded context, and retention design.
 - [V10 explicit-memory plan](docs/V10_EXPLICIT_MEMORY_PLAN.md) — user-controlled durable Assistant preferences, separate from chat history and ledger data.
+- [V6 Spring AI migration plan](docs/V6_SPRING_AI_MIGRATION_PLAN.md) — opt-in migration from handwritten provider calls to Spring AI while preserving the local, read-only tool boundary.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

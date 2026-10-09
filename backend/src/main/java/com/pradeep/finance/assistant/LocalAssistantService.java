@@ -26,7 +26,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 
 /** Local LM Studio orchestration. The model can only request named read-only finance tools. */
 @Service
-public class LocalAssistantService {
+public class LocalAssistantService implements AssistantRuntime {
     private static final Pattern MONTH_NAME = Pattern.compile("(?i)\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private static final Pattern MERCHANT = Pattern.compile("(?i)\\bat\\s+(.+?)(?=\\s+(?:for|in|during)\\b|[?!.]?$)");
     private static final Pattern MERCHANT_MONTH_SHORTHAND = Pattern.compile("(?i)^\\s*(.+?)\\s+(?:in\\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\\s+\\d{4})?\\s*[?!.]?\\s*$");

@@ -1,6 +1,8 @@
 param(
     [ValidateSet('lm-studio', 'bedrock-mantle', 'bedrock')]
     [string]$Provider = 'bedrock-mantle',
+    [ValidateSet('custom', 'spring-ai-lm-studio')]
+    [string]$Runtime = 'custom',
     [string]$Model = 'google.gemma-4-e2b',
     [ValidateSet('', 'low', 'medium', 'high')]
     [string]$ReasoningEffort = 'high',
@@ -21,11 +23,17 @@ if (-not (Test-Path -LiteralPath $backendPath)) {
 if ($Provider -eq 'bedrock-mantle' -and [string]::IsNullOrWhiteSpace($env:AWS_BEARER_TOKEN_BEDROCK) -and [string]::IsNullOrWhiteSpace($env:BEDROCK_API_KEY)) {
     throw 'Bedrock Mantle needs AWS_BEARER_TOKEN_BEDROCK or BEDROCK_API_KEY in this PowerShell session. The script never stores credentials.'
 }
+if ($Runtime -eq 'spring-ai-lm-studio' -and $Provider -ne 'lm-studio') {
+    throw 'The Spring AI V6 runtime currently supports LM Studio only. Use -Provider lm-studio.'
+}
 
 $env:FINANCE_ASSISTANT_PROVIDER = $Provider
+$env:FINANCE_ASSISTANT_RUNTIME = $Runtime
 $env:FINANCE_ASSISTANT_MODEL = $Model
 $env:FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS = $FinalAnswerMaxTokens
 $env:FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS = $ToolSelectionMaxTokens
+$env:FINANCE_SPRING_AI_ENABLED = if ($Runtime -eq 'spring-ai-lm-studio') { 'true' } else { 'false' }
+if ($Runtime -eq 'spring-ai-lm-studio') { $env:FINANCE_SPRING_AI_LM_STUDIO_BASE_URL = 'http://localhost:1234' }
 
 if ($Provider -eq 'bedrock-mantle') {
     $env:BEDROCK_REASONING_EFFORT = $ReasoningEffort
@@ -33,6 +41,7 @@ if ($Provider -eq 'bedrock-mantle') {
 
 Write-Host "Starting Finance Tracker backend"
 Write-Host "  Provider: $Provider"
+Write-Host "  Runtime: $Runtime"
 Write-Host "  Model: $Model"
 Write-Host "  Tool-selection allowance: $ToolSelectionMaxTokens"
 Write-Host "  Final-answer allowance: $FinalAnswerMaxTokens"

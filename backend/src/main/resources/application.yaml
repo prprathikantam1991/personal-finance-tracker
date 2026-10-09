@@ -19,10 +19,27 @@ spring:
     # V6 migration foundation. The current custom assistant remains the default path.
     # Spring AI is opt-in until tool and provider parity are verified.
     openai:
+      # Spring AI's OpenAI client adds /v1 itself; use the LM Studio server root here.
+      base-url: ${FINANCE_SPRING_AI_LM_STUDIO_BASE_URL:http://localhost:1234}
+      # Spring AI requires a non-empty value even when LM Studio's local server
+      # has authentication disabled. This placeholder is not a secret.
+      api-key: ${LM_STUDIO_API_KEY:lm-studio}
       chat:
-        enabled: false
+        enabled: ${FINANCE_SPRING_AI_ENABLED:false}
+        options:
+          model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
+          temperature: 0.1
       embedding:
         enabled: false
+    # The OpenAI-compatible starter includes optional media models. This service
+    # only uses chat, so keep every unrelated model family out of the context.
+    model:
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
 
 server:
   port: 8080
@@ -37,6 +54,8 @@ finance:
   assistant:
     # Change to "bedrock" only after local AWS credentials and model access are configured.
     provider: ${FINANCE_ASSISTANT_PROVIDER:lm-studio}
+    # custom is the proven V4 runtime. spring-ai-lm-studio is opt-in for V6 parity testing.
+    runtime: ${FINANCE_ASSISTANT_RUNTIME:custom}
     model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
     final-answer-max-tokens: ${FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS:1200}
     tool-selection-max-tokens: ${FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS:160}

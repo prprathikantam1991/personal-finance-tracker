@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 class SpringAiFinanceToolsTest {
 
     private final FinanceToolsService financeTools = mock(FinanceToolsService.class);
-    private final SpringAiFinanceTools tools = new SpringAiFinanceTools(financeTools);
+    private final ToolExecutionTrace toolTrace = new ToolExecutionTrace();
+    private final SpringAiFinanceTools tools = new SpringAiFinanceTools(financeTools, toolTrace);
 
     @Test
     void delegatesAComparisonToTheExistingReadOnlyService() {

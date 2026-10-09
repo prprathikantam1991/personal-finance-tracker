@@ -48,9 +48,11 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - Do not expose repositories, SQL, import operations, filesystem operations, or write methods.
    - `SpringAiFinanceTools` exposes the same eleven named read-only operations already approved for the Assistant. It delegates every call to `FinanceToolsService`, so the established filtering, calculation, and size-limit behavior remains the single implementation of record.
 
-3. **Local-provider parity path**
+3. **Local-provider parity path — implementation ready**
    - Add an opt-in Spring AI OpenAI-compatible configuration for LM Studio.
    - Route a selected test mode through `ChatClient` and compare the response, tool trace, and evidence against the existing evaluation suite.
+   - `FINANCE_ASSISTANT_RUNTIME=spring-ai-lm-studio` activates this path only when `FINANCE_SPRING_AI_ENABLED=true`. The repository launcher sets both values when invoked with `-Provider lm-studio -Runtime spring-ai-lm-studio`.
+   - The custom V4 runtime remains the default. A request-local trace records the named tool callbacks Spring AI executed, so the existing Angular evidence and agent-activity panels continue to receive verified tool names.
 
 4. **Bedrock provider path**
    - Add an explicit Spring AI Bedrock Converse profile using the local AWS credential chain.
@@ -106,6 +108,17 @@ It publishes these eleven operations: monthly summary, category spending, mercha
 - Spring AI dependencies are present but its model auto-configuration is disabled by default during the foundation phase.
 - No API key is committed or stored in SQLite.
 - When cloud mode is later enabled, the database and raw statement files remain local. The model receives only a question, selected bounded context, tool definitions, and the individual tool results needed to answer.
+
+## V6 local evaluation procedure
+
+1. Load a tool-capable model and start LM Studio's local server.
+2. Start the backend with `./scripts/start-backend.ps1 -Provider lm-studio -Runtime spring-ai-lm-studio -Model <loaded-model-id>`.
+3. Run the V4 verification prompts through the normal Assistant UI or API.
+4. Confirm the answer facts, named tools, evidence, and error behavior are equivalent to the custom runtime.
+5. Restart without the runtime flag to roll back. No migration changes SQLite data, statements, imports, or conversation history.
+
+The Spring AI client points at LM Studio's server root (`http://localhost:1234`), rather than the handwritten client's `/v1` base URL, because Spring AI supplies the OpenAI API path itself.
+Spring AI also requires a non-empty API-key setting even when LM Studio has local authentication disabled; the default `lm-studio` placeholder is not a credential and can be replaced by `LM_STUDIO_API_KEY` when local authentication is enabled.
 
 ## Definition of done
 

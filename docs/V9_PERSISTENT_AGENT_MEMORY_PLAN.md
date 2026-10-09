@@ -112,6 +112,10 @@ V9 does not automatically create durable personal facts from messages. If a late
 - Deleting a conversation removes its messages and session summary locally.
 - V7 authentication must add ownership checks before multi-user persistence is enabled.
 
+## Correctness rule for remembered merchant follow-ups
+
+When a person asks for spending at one named merchant, including a follow-up such as “What about August?”, Spring Boot resolves the remembered merchant and date range, then calculates the amount from date-filtered confirmed transaction rows. It does not use the aggregate **Top merchants** lookup for this question type. This prevents a model from mistaking a period-wide top-merchant total for the requested merchant’s total.
+
 ## Spring AI and LangChain4j assessment
 
 Both libraries can reduce plumbing for a sliding message window and persistent memory store. Spring AI offers chat-memory advisors; LangChain4j offers `ChatMemory`, window policies, and a persistent-store extension point. They are implementation options, not the architecture itself.

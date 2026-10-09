@@ -3,6 +3,7 @@ package com.pradeep.finance.assistant;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -155,6 +156,24 @@ class AgentRunEvaluationTest {
         assertThat(result.answer()).contains("20%");
         assertThat(result.steps()).singleElement().satisfies(step -> assertThat(step.outcome()).isEqualTo("Fallback"));
         verify(financeTools).creditUtilization();
+    }
+
+    @Test
+    void calculatesMerchantFollowUpsFromDateFilteredTransactionsRatherThanTopMerchantAggregates() {
+        when(financeTools.searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 8, 1)), eq(java.time.LocalDate.of(2026, 8, 31)), eq(null), eq("Patel Brothers")))
+                .thenReturn(List.of(new com.pradeep.finance.transaction.TransactionResponse(
+                        "transaction-1", "account-1", "Sample Card", com.pradeep.finance.account.AccountType.CREDIT_CARD,
+                        java.time.LocalDate.of(2026, 8, 18), "PATEL BROTHERS", "Patel Brothers", BigDecimal.valueOf(68.05),
+                        null, "Groceries", "HIGH", null, "CONFIRMED")));
+
+        AssistantChatResponse result = service.chat("What about August?", List.of(
+                new AssistantConversationMessage("user", "How much did I spend at Patel Brothers in July?")),
+                new ConversationContext("2026-07-01", "2026-07-31", "Patel Brothers", null, null, null));
+
+        assertThat(result.answer()).contains("$68.05").contains("Patel Brothers");
+        assertThat(result.toolsUsed()).containsExactly("search_transactions");
+        verify(financeTools).searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 8, 1)), eq(java.time.LocalDate.of(2026, 8, 31)), eq(null), eq("Patel Brothers"));
+        verify(localModelClient, never()).complete(any(), any(), anyInt());
     }
 
     @Test

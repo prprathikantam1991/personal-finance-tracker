@@ -56,6 +56,10 @@ public class LocalAssistantService {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
         DateRange resolvedRange = resolveRange(question, safeConversation, savedContext);
         String resolvedMerchant = resolveMerchant(question, safeConversation, savedContext);
+        if (isExactMerchantSpendingQuestion(question, resolvedMerchant)) {
+            return directAnswer(question, safeConversation, savedContext)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_GATEWAY, "Could not calculate the requested merchant spending."));
+        }
         List<Map<String, Object>> messages = new ArrayList<>();
         messages.add(message("system", systemPrompt() + contextPrompt(resolvedRange, resolvedMerchant)));
         safeConversation.stream().filter(item -> ("user".equals(item.role()) || "assistant".equals(item.role())) && item.text() != null && !item.text().isBlank()).limit(12).forEach(item -> messages.add(message(item.role(), item.text())));
@@ -276,6 +280,12 @@ public class LocalAssistantService {
     private boolean usesPriorContext(String question) {
         String normalized = question.toLowerCase(Locale.ROOT);
         return normalized.startsWith("overall") || normalized.contains("what about") || normalized.contains("same period") || normalized.contains("that period") || normalized.contains("that merchant");
+    }
+    /** Exact merchant totals are calculated from date-filtered ledger rows, never inferred from the top-merchants aggregate. */
+    private boolean isExactMerchantSpendingQuestion(String question, String merchant) {
+        if (merchant == null || merchant.isBlank()) return false;
+        String normalized = question.toLowerCase(Locale.ROOT);
+        return normalized.matches(".*\\b(spend|spent|spending|expense|expenses)\\b.*") || usesPriorContext(question);
     }
     private boolean needsPeriodClarification(String question, DateRange range) {
         if (range != null) return false;

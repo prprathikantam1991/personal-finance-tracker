@@ -2,11 +2,13 @@ package com.pradeep.finance.assistant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 
 import java.util.List;
+import java.time.Instant;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -70,5 +72,35 @@ class AssistantControllerTest {
         mockMvc.perform(post("/api/assistant/agent-runs").contentType("application/json")
                         .content("{\"message\":\"What is my credit utilization?\",\"conversation\":[]}"))
                 .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    void createsAndRestoresABackendOwnedConversation() throws Exception {
+        ConversationResponse response = new ConversationResponse("conversation-1", "First question", Instant.parse("2026-10-08T12:00:00Z"),
+                Instant.parse("2026-10-08T12:00:00Z"), List.of(new ConversationMessageResponse("user", "Hello", null, List.of(), List.of(), List.of())));
+        when(conversationService.create()).thenReturn(response);
+        when(conversationService.get("conversation-1")).thenReturn(response);
+
+        mockMvc.perform(post("/api/assistant/conversations").contentType("application/json"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value("conversation-1"));
+        mockMvc.perform(get("/api/assistant/conversations/conversation-1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.messages[0].text").value("Hello"));
+    }
+
+    @Test
+    void savesAConversationTurnUsingServerLoadedPromptContext() throws Exception {
+        when(conversationService.prepareTurn(any(), any())).thenReturn(new ConversationService.PromptContext(
+                List.of(new AssistantConversationMessage("user", "Earlier question")),
+                new ConversationContext("2026-08-01", "2026-08-31", "Patel Brothers", "Groceries", null, null)));
+        when(localAssistantService.chat(any(), any(), any())).thenReturn(new AssistantChatResponse(
+                "Grounded answer", List.of("get_merchant_spending"), "test-model", "TOOL_CALL", List.of("Confirmed saved finance data")));
+
+        mockMvc.perform(post("/api/assistant/conversations/conversation-1/messages").contentType("application/json")
+                        .content("{\"message\":\"What about August?\",\"agentMode\":false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.conversationId").value("conversation-1"))
+                .andExpect(jsonPath("$.toolsUsed[0]").value("get_merchant_spending"));
     }
 }

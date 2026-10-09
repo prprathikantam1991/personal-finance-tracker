@@ -1,6 +1,6 @@
 # V9 — Persistent Agent Memory
 
-**Status:** in progress — the first local persistence slice adds SQLite conversation tables, backend-owned IDs, bounded recent-message loading, structured session context, and Assistant UI controls. Follow-up work will add dedicated persistence tests and complete end-to-end restoration validation.
+**Status:** in progress — the local persistence slice now includes SQLite conversation tables, backend-owned IDs, bounded recent-message loading, structured session context, Assistant UI controls, and focused service/controller tests. The remaining validation is a live local API check after the backend is restarted with migration `V18`.
 
 ## Goal
 
@@ -149,6 +149,14 @@ In an interview, this can be described as a **stateful application around a stat
 - Conversation records are local-only and excluded from Git.
 - Existing read-only tool validation, evidence, and agent limits remain unchanged.
 - Tests cover conversation isolation, window trimming, refresh restoration, deletion, and follow-up context resolution.
+
+## Verification completed
+
+- `ConversationServiceTest` verifies the newest-12-message prompt window, saved follow-up context, transcript metadata restoration, and child-record deletion before conversation deletion.
+- `AssistantControllerTest` verifies conversation creation/restoration routes and a server-loaded prompt context for a saved turn.
+- The Angular production build verifies the Assistant page’s refresh, new-conversation, and deliberate-delete controls compile successfully.
+
+The remaining live check is intentionally small and does not require a cloud or local model: create a conversation, retrieve it, delete it, and confirm that a later retrieval returns `404`. A model-backed follow-up check can then confirm that “What about August?” retains an earlier merchant context.
 
 ## Out of scope
 

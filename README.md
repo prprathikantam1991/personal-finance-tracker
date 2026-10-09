@@ -46,6 +46,7 @@ flowchart LR
 - Account balances, card terms, statement activity, utilization, and historical snapshots.
 - Transaction search and filtering, Dashboard summaries/trends, merchant spending, recurring detection, and reminders.
 - Local LM Studio AI Assistant with structured tool calling and visible data-used evidence.
+- Local, persistent Assistant conversations with backend-owned IDs, bounded session context, refresh restoration, and explicit deletion.
 - Opt-in Amazon Bedrock Runtime adapter for Claude Haiku 4.5 and other Converse-compatible models; finance tools remain local and read-only.
 
 ## Run locally

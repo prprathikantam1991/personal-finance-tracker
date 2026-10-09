@@ -47,11 +47,14 @@ export class AssistantPage implements OnInit {
   protected newConversation(): void { if (!this.sending()) this.createConversation(); }
   protected deleteConversation(): void {
     if (!this.conversationId || this.sending()) return;
+    if (!window.confirm('Delete this conversation and its local history? This cannot be undone.')) return;
     this.http.delete(`http://localhost:8080/api/assistant/conversations/${this.conversationId}`).subscribe({ next: () => this.createConversation() });
   }
   protected setAgentMode(enabled: boolean): void { this.agentMode.set(enabled); }
   private createConversation(): void {
     this.loadingConversation.set(true);
+    this.messages.set([]);
+    this.conversationId = null;
     this.http.post<Conversation>('http://localhost:8080/api/assistant/conversations', {}).subscribe({
       next: conversation => this.restoreConversation(conversation),
       error: response => { this.error.set(this.assistantError(response.status, response.error?.detail)); this.loadingConversation.set(false); },

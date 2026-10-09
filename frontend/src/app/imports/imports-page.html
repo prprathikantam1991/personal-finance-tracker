@@ -43,6 +43,16 @@
   </section>
 }
 
+<section class="coverage-section">
+  <div class="section-title coverage-title"><div><p class="eyebrow">STATEMENT COVERAGE</p><h2>Uploaded statements by account</h2><p>Green checks are saved statements. A red marker means no statement is saved after that account’s first observed statement month.</p></div><label>Year<select [value]="coverageYear()" (change)="selectCoverageYear($event)">@for (year of coverageYears; track year) { <option [value]="year">{{ year }}</option> }</select></label></div>
+  @if (coverageError()) { <p class="error">{{ coverageError() }}</p> }
+  @else if (coverage(); as tracker) {
+    @if (tracker.accounts.length) { <div class="table-wrap"><table class="coverage-table"><thead><tr><th>Account</th><th>Type</th>@for (month of ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; track month) { <th>{{ month }}</th> }</tr></thead><tbody>
+      @for (account of tracker.accounts; track account.accountId) { <tr><td><strong>{{ account.accountName }}</strong><span>{{ account.institution }}{{ account.lastFour ? ' •' + account.lastFour : '' }}</span></td><td>{{ account.accountType.replaceAll('_', ' ') }}</td>@for (month of account.months; track month.month) { <td class="coverage-cell"><span class="coverage-mark" [class.imported]="month.status === 'IMPORTED'" [class.missing]="month.status === 'MISSING'" [attr.title]="month.status === 'IMPORTED' ? ('Saved: ' + month.originalFilename) : month.status === 'MISSING' ? 'No saved statement' : 'Not expected'">{{ month.status === 'IMPORTED' ? '✓' : month.status === 'MISSING' ? '×' : '—' }}</span></td> }</tr> }
+    </tbody></table></div> } @else { <div class="empty-history">Import a statement to start tracking coverage.</div> }
+  }
+</section>
+
 <section class="history-section">
   <div class="section-title"><div><p class="eyebrow">IMPORT HISTORY</p><h2>Recent statement imports</h2><p>Review any import that still needs confirmation before its transactions become final.</p></div></div>
   @if (historyError()) { <p class="error">{{ historyError() }}</p> }

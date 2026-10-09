@@ -30,6 +30,22 @@ export interface IncomingStatementItem {
   status: 'AWAITING_PROCESSING' | 'NEEDS_ATTENTION' | 'UNSUPPORTED' | 'FAILED';
   message: string;
 }
+export interface StatementCoverageMonth {
+  month: number;
+  status: 'IMPORTED' | 'MISSING' | 'NOT_EXPECTED';
+  importId: string | null;
+  originalFilename: string | null;
+  statementDate: string | null;
+}
+export interface StatementCoverageAccount {
+  accountId: string;
+  accountName: string;
+  institution: string;
+  accountType: string;
+  lastFour: string | null;
+  months: StatementCoverageMonth[];
+}
+export interface StatementCoverage { year: number; accounts: StatementCoverageAccount[]; }
 
 @Injectable({ providedIn: 'root' })
 export class ImportsApiService {
@@ -41,6 +57,7 @@ export class ImportsApiService {
     return this.http.post<ImportResult>('http://localhost:8080/api/imports', formData);
   }
   history() { return this.http.get<ImportHistoryItem[]>('http://localhost:8080/api/imports'); }
+  coverage(year: number) { return this.http.get<StatementCoverage>('http://localhost:8080/api/imports/coverage', { params: { year } }); }
   incoming() { return this.http.get<IncomingStatementItem[]>('http://localhost:8080/api/automation/incoming'); }
   review(importId: string) { return this.http.get<ImportReview>(`http://localhost:8080/api/imports/${importId}`); }
   updateTransaction(importId: string, row: ReviewTransaction) { return this.http.patch<ReviewTransaction>(`http://localhost:8080/api/imports/${importId}/transactions/${row.id}`, { date: row.date, description: row.description, amount: row.amount, balance: row.balance }); }

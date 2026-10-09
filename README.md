@@ -38,9 +38,12 @@ flowchart LR
 5. Accounts, Transactions, Dashboard, and Notifications are projections over that trusted data.
 6. The Assistant uses approved read-only finance tools; it never receives direct database access.
 
+The Imports page also provides a year-selectable statement-coverage grid. A green check means a saved statement is associated with that account and month; a red cross means no saved statement exists after the account's first observed statement month. A neutral dash avoids treating months before the app first saw that account as missing.
+
 ## Current capabilities
 
 - PDF/CSV imports for supported American Express, Bank of America, Discover, and Wells Fargo statement layouts.
+- An Imports coverage matrix by account and calendar month. It derives coverage from saved statement-cycle dates (or transaction/import date fallback), marks months before the first observed statement as not expected, and makes genuinely missing saved months visible.
 - Automatic account matching/creation, duplicate handling, transfer recognition, merchant normalization, and remembered category rules.
 - Watched-folder statement imports with local archive handling.
 - Account balances, card terms, statement activity, utilization, and historical snapshots.

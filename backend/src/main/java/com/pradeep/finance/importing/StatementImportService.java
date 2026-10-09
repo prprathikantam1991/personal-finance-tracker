@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.Year;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -138,6 +140,67 @@ public class StatementImportService {
                 ImportSource.valueOf(rs.getString("import_source")), ImportStatus.valueOf(rs.getString("status")),
                 rs.getString("name"), rs.getInt("transaction_count"), Instant.parse(rs.getString("imported_at"))));
     }
+
+    /**
+     * Builds a local statement coverage matrix. A month becomes expected only after the first
+     * saved statement for that account, which avoids calling months before an account was added
+     * "missing" merely because the application has no history for them.
+     */
+    @Transactional(readOnly = true)
+    public StatementCoverage getCoverage(Integer requestedYear) {
+        int year = requestedYear == null ? Year.now().getValue() : requestedYear;
+        if (year < 2000 || year > Year.now().plusYears(1).getValue()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Choose a valid calendar year.");
+        }
+
+        List<CoverageImport> imports = jdbcTemplate.query("""
+                SELECT a.id AS account_id, a.name AS account_name, a.institution, a.account_type, a.last_four,
+                       si.id AS import_id, si.original_filename, si.status,
+                       COALESCE(si.cycle_end_date,
+                                (SELECT MAX(t.transaction_date) FROM transactions t WHERE t.import_id = si.id),
+                                substr(si.imported_at, 1, 10)) AS statement_date
+                FROM accounts a
+                LEFT JOIN statement_imports si ON si.account_id = a.id
+                ORDER BY a.institution, a.name, statement_date
+                """, (rs, row) -> new CoverageImport(
+                rs.getString("account_id"), rs.getString("account_name"), rs.getString("institution"),
+                rs.getString("account_type"), rs.getString("last_four"), rs.getString("import_id"),
+                rs.getString("original_filename"), rs.getString("status"),
+                rs.getString("statement_date") == null ? null : LocalDate.parse(rs.getString("statement_date"))));
+
+        java.util.Map<String, List<CoverageImport>> byAccount = new java.util.LinkedHashMap<>();
+        for (CoverageImport item : imports) byAccount.computeIfAbsent(item.accountId(), ignored -> new ArrayList<>()).add(item);
+        int lastRelevantMonth = year == Year.now().getValue() ? LocalDate.now().getMonthValue() : 12;
+
+        List<StatementCoverageAccount> accounts = new ArrayList<>();
+        for (List<CoverageImport> accountImports : byAccount.values()) {
+            CoverageImport identity = accountImports.getFirst();
+            List<CoverageImport> yearImports = accountImports.stream()
+                    .filter(item -> item.statementDate() != null && item.statementDate().getYear() == year)
+                    .toList();
+            int firstObservedMonth = yearImports.stream().mapToInt(item -> item.statementDate().getMonthValue()).min().orElse(13);
+            List<StatementCoverageMonth> months = new ArrayList<>();
+            for (int month = 1; month <= 12; month++) {
+                final int currentMonth = month;
+                CoverageImport saved = yearImports.stream()
+                        .filter(item -> item.statementDate().getMonthValue() == currentMonth)
+                        .reduce((first, second) -> second).orElse(null);
+                StatementCoverageMonth.CoverageStatus status;
+                if (saved != null) status = StatementCoverageMonth.CoverageStatus.IMPORTED;
+                else if (month < firstObservedMonth || month > lastRelevantMonth) status = StatementCoverageMonth.CoverageStatus.NOT_EXPECTED;
+                else status = StatementCoverageMonth.CoverageStatus.MISSING;
+                months.add(new StatementCoverageMonth(month, status, saved == null ? null : saved.importId(),
+                        saved == null ? null : saved.originalFilename(), saved == null ? null : saved.statementDate()));
+            }
+            accounts.add(new StatementCoverageAccount(identity.accountId(), identity.accountName(), identity.institution(),
+                    identity.accountType(), identity.lastFour(), months));
+        }
+        return new StatementCoverage(year, accounts);
+    }
+
+    private record CoverageImport(String accountId, String accountName, String institution, String accountType,
+                                  String lastFour, String importId, String originalFilename, String status,
+                                  LocalDate statementDate) {}
 
     private AccountIdentificationResponse identifyAccount(String text) {
         Matcher bankOfAmericaCardMatch = BOFA_CARD_NUMBER.matcher(text);

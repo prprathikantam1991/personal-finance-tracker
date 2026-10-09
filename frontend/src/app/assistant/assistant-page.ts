@@ -53,6 +53,7 @@ export class AssistantPage implements OnInit {
     });
   }
   protected newConversation(): void { if (!this.sending()) this.createConversation(); }
+  protected scrollToTop(): void { window.scrollTo({ top: 0, behavior: 'smooth' }); }
   protected deleteConversation(): void {
     if (!this.conversationId || this.sending()) return;
     if (!window.confirm('Delete this conversation and its local history? This cannot be undone.')) return;

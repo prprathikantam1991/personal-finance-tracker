@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,6 +34,11 @@ public class StatementImportController {
 
     @GetMapping
     public List<ImportHistoryItem> history() { return statementImportService.getHistory(); }
+
+    @GetMapping("/coverage")
+    public StatementCoverage coverage(@RequestParam(required = false) Integer year) {
+        return statementImportService.getCoverage(year);
+    }
 
     @GetMapping("/{importId}") public ImportReview getReview(@PathVariable String importId) { return statementImportService.getReview(importId); }
     @PatchMapping("/{importId}/transactions/{transactionId}") public ReviewTransaction update(@PathVariable String importId, @PathVariable String transactionId, @Valid @RequestBody ReviewTransactionUpdate update) { return statementImportService.updateReviewTransaction(importId, transactionId, update); }

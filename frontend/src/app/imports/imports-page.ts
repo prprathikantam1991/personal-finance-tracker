@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe, DecimalPipe } from '@angular/common';
-import { ImportsApiService, ImportHistoryItem, ImportResult, IncomingStatementItem } from '../core/imports-api.service';
+import { ImportsApiService, ImportHistoryItem, ImportResult, IncomingStatementItem, StatementCoverage } from '../core/imports-api.service';
 import { Router } from '@angular/router';
 
 @Component({ selector: 'app-imports-page', imports: [CurrencyPipe, DatePipe, DecimalPipe], templateUrl: './imports-page.html', styleUrl: './imports-page.scss' })
@@ -14,8 +14,12 @@ export class ImportsPage implements OnInit {
   protected readonly history = signal<ImportHistoryItem[]>([]);
   protected readonly historyError = signal<string | null>(null);
   protected readonly incoming = signal<IncomingStatementItem[]>([]);
+  protected readonly coverage = signal<StatementCoverage | null>(null);
+  protected readonly coverageError = signal<string | null>(null);
+  protected readonly coverageYear = signal(new Date().getFullYear());
+  protected readonly coverageYears = Array.from({ length: 4 }, (_, index) => new Date().getFullYear() - index);
 
-  ngOnInit(): void { this.loadHistory(); this.loadIncoming(); }
+  ngOnInit(): void { this.loadHistory(); this.loadIncoming(); this.loadCoverage(); }
 
   protected selectFile(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -33,7 +37,7 @@ export class ImportsPage implements OnInit {
     this.importing.set(true);
     this.error.set(null);
     this.importsApi.upload(file).subscribe({
-      next: (result) => { this.result.set(result); this.importing.set(false); this.loadHistory(); this.loadIncoming(); this.router.navigate(['/imports', result.importId, 'review']); },
+      next: (result) => { this.result.set(result); this.importing.set(false); this.loadHistory(); this.loadIncoming(); this.loadCoverage(); this.router.navigate(['/imports', result.importId, 'review']); },
       error: (response) => { this.error.set(response.error?.message ?? 'Upload failed. Make sure the backend is running and try again.'); this.importing.set(false); },
     });
   }
@@ -41,6 +45,10 @@ export class ImportsPage implements OnInit {
   protected reset(): void { this.selectedFile.set(null); this.result.set(null); this.error.set(null); }
 
   protected reviewImport(importId: string): void { this.router.navigate(['/imports', importId, 'review']); }
+  protected selectCoverageYear(event: Event): void {
+    this.coverageYear.set(Number((event.target as HTMLSelectElement).value));
+    this.loadCoverage();
+  }
 
   private loadHistory(): void {
     this.importsApi.history().subscribe({
@@ -51,5 +59,12 @@ export class ImportsPage implements OnInit {
 
   private loadIncoming(): void {
     this.importsApi.incoming().subscribe({ next: incoming => this.incoming.set(incoming) });
+  }
+  private loadCoverage(): void {
+    this.coverageError.set(null);
+    this.importsApi.coverage(this.coverageYear()).subscribe({
+      next: coverage => this.coverage.set(coverage),
+      error: () => this.coverageError.set('Statement coverage is temporarily unavailable.'),
+    });
   }
 }

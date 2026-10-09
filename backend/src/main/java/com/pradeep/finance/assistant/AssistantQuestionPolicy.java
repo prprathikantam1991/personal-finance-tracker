@@ -11,17 +11,12 @@ final class AssistantQuestionPolicy {
     private AssistantQuestionPolicy() {
     }
 
-    static boolean needsSpendingPeriodClarification(String question, ConversationContext savedContext) {
-        if (question == null || question.isBlank() || hasSavedPeriod(savedContext)) return false;
+    static boolean needsSpendingPeriodClarification(String question) {
+        if (question == null || question.isBlank()) return false;
         String normalized = question.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").trim();
         boolean asksForAmount = normalized.contains("how much") || normalized.startsWith("what did i ");
         boolean mentionsSpending = normalized.matches(".*\\b(spend|spent|spending|expense|expenses)\\b.*");
         return asksForAmount && mentionsSpending && !hasExplicitPeriod(normalized);
-    }
-
-    private static boolean hasSavedPeriod(ConversationContext context) {
-        return context != null && ((context.from() != null && !context.from().isBlank())
-                || (context.to() != null && !context.to().isBlank()));
     }
 
     private static boolean hasExplicitPeriod(String question) {

@@ -17,5 +17,5 @@
     </div>
   </header>
   <main class="page-content"><router-outlet /></main>
-  <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion.value)"><span aria-hidden="true">✦</span><input #assistantQuestion type="text" placeholder="Ask Finance AI anything…" aria-label="Ask Finance AI" /><button type="submit">Ask</button></form>
+  @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><span aria-hidden="true">✦</span><input #assistantQuestion type="text" placeholder="Ask Finance AI anything…" aria-label="Ask Finance AI" /><button type="submit">Ask</button></form> }
 </div>

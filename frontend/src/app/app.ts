@@ -20,11 +20,14 @@ export class App implements OnInit {
     this.http.get<Reminder[]>('http://localhost:8080/api/reminders').subscribe({ next: reminders => this.reminders.set(reminders), error: () => this.reminders.set([]) });
   }
 
-  protected ask(question: string): void {
-    const value = question.trim();
+  protected ask(input: HTMLInputElement): void {
+    const value = input.value.trim();
     if (!value) return;
+    input.value = '';
     this.router.navigate(['/assistant'], { queryParams: { ask: value } });
   }
+
+  protected isAssistantPage(): boolean { return this.router.url.startsWith('/assistant'); }
 
   protected toggleNotifications(): void { this.notificationOpen.update(open => !open); }
   protected closeNotifications(): void { this.notificationOpen.set(false); }

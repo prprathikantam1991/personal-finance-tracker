@@ -42,7 +42,7 @@ The Imports page also provides a year-selectable statement-coverage grid. A gree
 
 ## Current capabilities
 
-- PDF/CSV imports for supported American Express, Bank of America, Bilt activity exports, Discover, and Wells Fargo statement layouts.
+- PDF/CSV imports for supported American Express, Bank of America, Bilt Blue card statements and activity exports, Discover, and Wells Fargo statement layouts.
 - An Imports coverage matrix by account and calendar month. It derives coverage from saved statement-cycle dates (or transaction/import date fallback), marks months before the first observed statement as not expected, and makes genuinely missing saved months visible.
 - Automatic account matching/creation, duplicate handling, transfer recognition, merchant normalization, and remembered category rules.
 - Watched-folder statement imports with local archive handling.

@@ -69,6 +69,17 @@ public class AccountService {
                 lastFour, "Wells Fargo Autograph •" + lastFour, "USD"), "wells fargo", lastFour, wellsIdentity));
     }
 
+    @Transactional(readOnly = true)
+    public AccountIdentificationResponse identifyExistingBiltCreditCard() {
+        List<Account> biltCards = accountRepository.findAllByOrderByInstitutionAscNameAsc().stream()
+                .filter(account -> "bilt".equalsIgnoreCase(account.getInstitution()))
+                .filter(account -> account.getAccountType() == AccountType.CREDIT_CARD).toList();
+        if (biltCards.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
+                AccountResponse.from(biltCards.getFirst()), "Matched the sole saved Bilt credit-card account.");
+        return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.CONFIRMATION_REQUIRED, null,
+                "This Bilt statement does not show a card ending, so it cannot be matched safely when multiple Bilt cards exist.");
+    }
+
     private AccountIdentificationResponse createAccount(
             AccountIdentificationRequest request,
             String institution,

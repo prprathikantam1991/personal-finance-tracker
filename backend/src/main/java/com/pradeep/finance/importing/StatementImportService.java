@@ -207,6 +207,9 @@ public class StatementImportService {
                                   LocalDate statementDate) {}
 
     private AccountIdentificationResponse identifyAccount(String text) {
+        if (text.contains("Bilt Blue Card") && text.contains("Cardless Inc.")) {
+            return accountService.identifyExistingBiltCreditCard();
+        }
         Matcher biltAccountMatch = BILT_CSV_CARD_LAST_FOUR.matcher(text);
         if ((text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT")) && biltAccountMatch.find()) {
             accountService.reconcileBiltToWellsAutograph("9484");

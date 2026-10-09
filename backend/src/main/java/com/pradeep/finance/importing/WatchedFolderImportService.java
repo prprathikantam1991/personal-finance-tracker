@@ -58,7 +58,8 @@ public class WatchedFolderImportService {
     private void importOne(Path path) {
         try {
             StatementImportResponse response = importService.importStatement(new LocalStatementFile(path), ImportSource.WATCHED_FOLDER);
-            if (response.transactions().isEmpty() && !importService.isRecognizedStatementSnapshot(response.importId())) {
+            if (response.transactions().isEmpty() && !importService.isRecognizedStatementSnapshot(response.importId())
+                    && !isLegacyCardConversionNotice(response)) {
                 inboxStatuses.put(path.getFileName().toString(), new InboxStatus("NEEDS_ATTENTION", "No transaction rows were found. Use a CSV export or add support for this statement layout."));
                 return;
             }
@@ -77,6 +78,11 @@ public class WatchedFolderImportService {
     private void archive(Path path) throws IOException {
         String name = Instant.now().toEpochMilli() + "-" + path.getFileName();
         Files.move(path, archiveDirectory.resolve(name), StandardCopyOption.ATOMIC_MOVE);
+    }
+
+    private boolean isLegacyCardConversionNotice(StatementImportResponse response) {
+        return response.accountIdentification().account() != null
+                && response.accountIdentification().message().contains("converted Wells Fargo Autograph account");
     }
 
     public List<IncomingStatementItem> incomingStatements() {

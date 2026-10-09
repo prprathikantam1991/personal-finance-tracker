@@ -49,6 +49,8 @@ A recognized statement that contains a usable account snapshot but **no transact
 
 When a statement layout identifies its institution and account type but omits the last four digits, the importer may match the **sole** saved account of that institution and type. This is intentionally not a broad name match: if more than one compatible local account exists, the file remains in the inbox for confirmation. Re-importing a previously unresolved file also backfills its import and transaction account links once a later parser rule identifies the account.
 
+A legacy Wells Fargo Bilt-to-Autograph conversion notice is a separate safe case: it is matched to the preserved Autograph credit line and archived after confirmation even when it contains neither transactions nor a statement snapshot. The application records the import but does not create financial activity from an informational notice.
+
 ## Statement coverage tracker
 
 ```mermaid

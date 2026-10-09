@@ -20,7 +20,7 @@ export class App implements OnInit {
     this.http.get<Reminder[]>('http://localhost:8080/api/reminders').subscribe({ next: reminders => this.reminders.set(reminders), error: () => this.reminders.set([]) });
   }
 
-  protected ask(input: HTMLInputElement): void {
+  protected ask(input: HTMLInputElement | HTMLTextAreaElement): void {
     const value = input.value.trim();
     if (!value) return;
     input.value = '';

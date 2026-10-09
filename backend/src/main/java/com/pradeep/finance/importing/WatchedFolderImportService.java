@@ -12,10 +12,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 @Service
+@ConditionalOnProperty(name = "finance.automation.enabled", havingValue = "true", matchIfMissing = true)
 public class WatchedFolderImportService {
     private final StatementImportService importService;
     private final Path incomingDirectory;

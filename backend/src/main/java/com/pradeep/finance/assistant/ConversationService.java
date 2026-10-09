@@ -63,14 +63,14 @@ public class ConversationService {
         conversation.touch();
         List<AssistantConversationMessage> contextMessages = recentMessages(conversationId);
         ConversationContext context = loadContext(conversationId);
-        long sequence = messages.countByConversationId(conversationId) + 1;
+        int sequence = nextSequence(conversationId);
         messages.save(AssistantMessage.create(conversationId, sequence, "user", question, null, null, null, null));
         return new PromptContext(contextMessages, context);
     }
 
     @Transactional
     public void completeTurn(String conversationId, String question, AssistantChatResponse response) {
-        long sequence = messages.countByConversationId(conversationId) + 1;
+        int sequence = nextSequence(conversationId);
         messages.save(AssistantMessage.create(conversationId, sequence, "assistant", response.answer(), response.executionMode(),
                 json(response.toolsUsed()), json(response.evidence()), null));
         updateContext(conversationId, question);
@@ -78,7 +78,7 @@ public class ConversationService {
 
     @Transactional
     public void completeTurn(String conversationId, String question, AgentRunResponse response) {
-        long sequence = messages.countByConversationId(conversationId) + 1;
+        int sequence = nextSequence(conversationId);
         messages.save(AssistantMessage.create(conversationId, sequence, "assistant", response.answer(), "AGENT_RUN",
                 json(response.toolsUsed()), json(response.evidence()), json(response.steps())));
         updateContext(conversationId, question);
@@ -89,6 +89,10 @@ public class ConversationService {
         int fromIndex = Math.max(0, all.size() - PROMPT_MESSAGE_LIMIT);
         return all.subList(fromIndex, all.size()).stream()
                 .map(message -> new AssistantConversationMessage(message.getRole(), message.getContent())).toList();
+    }
+
+    private int nextSequence(String conversationId) {
+        return Math.toIntExact(messages.countByConversationId(conversationId) + 1);
     }
 
     private void updateContext(String conversationId, String question) {

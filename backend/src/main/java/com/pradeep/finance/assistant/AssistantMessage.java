@@ -18,7 +18,7 @@ class AssistantMessage {
     @Column(name = "conversation_id", nullable = false, updatable = false)
     private String conversationId;
     @Column(name = "sequence_number", nullable = false, updatable = false)
-    private long sequenceNumber;
+    private int sequenceNumber;
     @Column(nullable = false, updatable = false)
     private String role;
     @Column(nullable = false, updatable = false)
@@ -35,7 +35,7 @@ class AssistantMessage {
 
     protected AssistantMessage() { }
 
-    static AssistantMessage create(String conversationId, long sequenceNumber, String role, String content,
+    static AssistantMessage create(String conversationId, int sequenceNumber, String role, String content,
                                    String executionMode, String toolsUsed, String evidence, String agentSteps) {
         AssistantMessage message = new AssistantMessage();
         message.id = UUID.randomUUID().toString();

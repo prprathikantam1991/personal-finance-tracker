@@ -7,7 +7,7 @@ flowchart TB
     UI[Angular 22 frontend] --> API[Spring Boot API]
     API --> IMPORT[Import and parser adapters]
     API --> FINANCE[Accounts, transactions, dashboard, notifications]
-    API --> ASSISTANT[Assistant orchestration]
+    API --> ASSISTANT[Assistant orchestration + conversation service]
     IMPORT --> DB[(SQLite)]
     FINANCE --> DB
     ASSISTANT --> TOOLS[Read-only finance tools]
@@ -17,9 +17,9 @@ flowchart TB
 
 ## Ownership boundaries
 
-- **Frontend:** presentation, filters, review interactions, and in-page Assistant conversation context.
-- **Backend:** statement parsing, persistence, financial calculations, data validation, API contracts, and AI tool authorization.
-- **SQLite:** local ledger, accounts, imports, transactions, category mappings, and statement snapshots.
+- **Frontend:** presentation, filters, review interactions, and Assistant transcript rendering.
+- **Backend:** statement parsing, persistence, financial calculations, data validation, API contracts, AI tool authorization, and bounded conversation-context assembly.
+- **SQLite:** local ledger, accounts, imports, transactions, category mappings, statement snapshots, and local Assistant conversations/messages/session context.
 - **LM Studio:** interprets questions and explains tool results. It has no database or filesystem permission.
 
 ## Data lifecycle

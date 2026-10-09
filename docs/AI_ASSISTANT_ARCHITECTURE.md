@@ -1,6 +1,6 @@
 # Personal Finance Tracker — V3 AI Assistant Architecture
 
-**Status:** implemented foundation; LM Studio default plus opt-in Amazon Bedrock Runtime adapter
+**Status:** V3/V4/V9 delivered; LM Studio default plus opt-in Amazon Bedrock adapters
 **Primary implementation:** `backend/`  
 **User interface:** `frontend/`  
 **Data policy:** local-first and read-only in V3
@@ -44,12 +44,13 @@ This distinction is the central design principle:
 ```mermaid
 flowchart LR
     U[User] --> UI[Angular Finance Assistant]
-    UI -->|POST /api/assistant/chat| API[Spring Boot Assistant API]
+    UI -->|conversation ID + question| API[Spring Boot Assistant API]
     API --> ORCH[LocalAssistantService]
+    API --> MEMORY[ConversationService]
     ORCH <-->|provider adapter| LM[LM Studio or Bedrock model]
     ORCH --> TOOLS[FinanceToolsService]
     TOOLS --> DOMAIN[Existing finance services]
-    DOMAIN --> DB[(SQLite)]
+    DOMAIN --> DB[(SQLite ledger + conversations)]
     DOMAIN --> FILES[Local imported statements]
 
     style DB fill:#e8f4ec,stroke:#238457
@@ -98,7 +99,7 @@ flowchart TD
 
 The deterministic calculation is therefore not “instead of AI.” It is the trustworthy evidence that makes an AI finance assistant possible.
 
-## 5. Current V3 tool catalog
+## 5. Current V3/V4 tool catalog
 
 The public, provider-independent tool layer is exposed below `/api/finance-tools`. `LocalAssistantService` calls the same Java service directly; the HTTP endpoints also make each tool independently testable.
 
@@ -161,8 +162,9 @@ sequenceDiagram
     participant DB as SQLite
 
     User->>UI: Ask a question
-    UI->>API: message + recent conversation
-    API->>O: validated request
+    UI->>API: conversation ID + question
+    API->>API: load bounded local context
+    API->>O: validated request + context
     O->>L: system prompt + conversation + tool definitions
     L-->>O: tool call name + JSON arguments
     O->>O: validate tool name and dates
@@ -179,7 +181,7 @@ sequenceDiagram
 
 ### Step-by-step details
 
-1. **Input:** Angular sends the current question and up to 12 recent user/assistant messages. The current question is required and validated with `@NotBlank`.
+1. **Input:** Angular sends the current question to its backend-owned conversation. The current question is required and validated with `@NotBlank`; Spring Boot loads the bounded recent-message window and structured session context from SQLite.
 2. **System instruction:** Spring Boot adds a non-user-editable system prompt. It requires factual answers to use tools, prohibits invention, includes the current date, and explains date semantics such as “last month.”
 3. **Tool listing:** Spring Boot sends the pre-built tool catalog to LM Studio’s `/v1/chat/completions` endpoint.
 4. **Model decision:** The model either emits a text response or an OpenAI-style `tool_calls` array containing a tool name and JSON string arguments.
@@ -203,12 +205,14 @@ This was not a database problem. It came from four integration realities:
 
 ### Current reliability support
 
-For a small group of unambiguous, high-value questions, the service provides a direct, structured route before asking the model:
+For a small group of unambiguous, high-value questions, the service provides a direct, structured route. Some activate only after a provider declines tool selection; narrowly defined multi-source plans may activate before model selection so every displayed fact has an explicit source:
 
 - overall or per-card credit utilization;
 - spending by category for a named month or “last month”;
 - merchant spending for a named merchant and period;
 - simple “overall” follow-ups that refer to a previously named merchant.
+- period comparison plus top merchants;
+- strict utilization paydown, payment coverage, recurring-expense/cash coverage, focused merchant/category comparisons, and last-two-month India-remittance comparisons.
 
 These routes still use the same approved finance tools and return the tool name to the UI. They do not query data outside the application.
 
@@ -227,18 +231,18 @@ flowchart LR
     V -.fallback only.-> F[Direct structured response]
 ```
 
-This LLM-first route is implemented. `LocalAssistantService` sends the tool catalog to LM Studio before considering deterministic routing. A direct structured response is used only when the local model is unavailable, returns invalid tool arguments, or returns no tool call for a question the application can answer safely. The API reports `MODEL_TOOL_CALL`, `MODEL_RESPONSE`, or `FALLBACK` as `executionMode` so endpoint tests can verify the route used.
+The LLM-first route remains the default. `LocalAssistantService` sends the tool catalog to the selected provider for open-ended questions and bounded agent reasoning. A direct structured response is used for a deliberately small set of supported plans when the provider declines a required lookup or when the plan must prove that multiple sources were fetched before a financial claim is shown. The API reports `MODEL_TOOL_CALL`, `MODEL_RESPONSE`, or `FALLBACK` as `executionMode` so endpoint tests can verify the route used.
 
 ## 9. Conversation memory
 
-V3 conversation is currently **client-session memory**, not a long-term database memory.
+V9 delivers **backend-owned persistent session memory**, not automatic long-term personal memory.
 
-- The Angular Assistant page stores displayed messages in memory while the page is open.
-- Each request includes the newest 12 user/assistant messages as `conversation`.
-- Refreshing the page starts a new conversation.
-- No chat transcript is persisted in SQLite in the current implementation.
+- Spring Boot generates and owns an opaque `conversationId`; the model neither creates nor authorizes it.
+- SQLite stores the complete user-visible transcript, while prompt assembly uses only the newest bounded window plus structured context.
+- The Assistant restores the latest local conversation after refresh and offers New conversation and Delete conversation controls.
+- Deleting a conversation removes its messages and structured session context locally.
 
-The planned persistent-memory design is documented separately in [V9 — Persistent Agent Memory](V9_PERSISTENT_AGENT_MEMORY_PLAN.md). It will introduce a backend-generated `conversationId`, locally persisted history, a bounded prompt window, and explicit user-controlled deletion. The model will not generate, own, or authorize access through a conversation ID.
+The planned [V10 explicit-memory design](V10_EXPLICIT_MEMORY_PLAN.md) adds only preferences that the person can see, edit, and delete. It remains separate from both chat history and the finance ledger.
 
 Before calling the model, the backend resolves only safe, explicit follow-up context from that window. It can carry forward the most recent named month range or merchant when the new question uses an unambiguous reference such as “what about August?”, “same period”, or “overall”. It does not create durable user profiles or infer missing facts.
 
@@ -256,15 +260,15 @@ Every LM Studio completion has a configurable 60-second read limit (`LM_STUDIO_T
 
 The Assistant page maps these cases to plain-language messages. It does not expose stack traces, raw prompts, or transaction data in errors.
 
-The V3 evaluation set is run whenever the prompt, tool contracts, date handling, or local model changes:
+The Assistant/V4 evaluation set is run whenever the prompt, tool contracts, date handling, or provider changes:
 
 1. Overall credit utilization → `get_credit_utilization`.
 2. Category spending for last month → `get_category_spending` with the previous calendar month.
 3. Merchant spending for named months → `search_transactions` with the merchant and resolved range.
 4. Follow-up “What about August?” after a named merchant/month → the same merchant plus August's range.
-5. Unavailable, slow, and malformed model responses → a safe `503`, `504`, or `502` response or an applicable deterministic fallback.
+5. Unavailable, slow, malformed, or pseudo-tool model responses → a safe `503`, `504`, `502`, or an applicable deterministic fallback; raw tool-like text is never shown as a completed answer.
 
-This design is intentional for privacy and simplicity. A future enhancement could add an opt-in, encrypted local conversation history, but it is not required for correct finance answers.
+This design is intentional for privacy and simplicity. V10 may add opt-in explicit preferences; it will not silently infer durable personal facts from conversation or finance data.
 
 ## 10. Date interpretation
 

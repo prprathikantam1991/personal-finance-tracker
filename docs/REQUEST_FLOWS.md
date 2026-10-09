@@ -25,14 +25,16 @@ sequenceDiagram
     participant B as Spring Boot
     participant L as LM Studio
     participant F as Finance tools
-    UI->>B: Question and recent conversation
-    B->>L: Prompt and approved tool definitions
+    UI->>B: conversation ID and question
+    B->>B: Load bounded local history + structured session context
+    B->>L: Prompt, bounded context, and approved tool definitions
     L-->>B: Requested tool call
     B->>F: Validated read-only operation
     F-->>B: Structured local result
     B->>L: Tool result
     L-->>B: Grounded response
-    B-->>UI: Answer and tools used
+    B->>B: Persist user turn, answer, and safe context update
+    B-->>UI: Answer, tools used, and trace when multi-step
 ```
 
 ## Watched-folder automation

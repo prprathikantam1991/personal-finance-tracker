@@ -20,6 +20,8 @@ An evaluation proves that the application behaves safely and predictably around 
 | Invalid arguments | Reject malformed dates, over-wide ranges, and non-numeric or out-of-range utilization targets. |
 | Tool/result budget | Allow at most three sequential tool rounds and reject oversized results. |
 | No tool request | Use only a narrow deterministic fallback when the question is supported; otherwise tell the user that no grounded lookup occurred. |
+| Tool-like text in ordinary model content | Reject it safely; never render raw pseudo-tool syntax as a completed answer. |
+| Multi-source finance claim | Run every required approved lookup or use a focused application-owned plan; do not reuse a prior assistant answer as evidence. |
 
 The deterministic financial-calculation tests live in `FinanceToolsServiceTest`. For example, the utilization plan must calculate a payment that results in a balance **strictly below** the requested threshold at cent precision.
 
@@ -45,7 +47,7 @@ The rolling log at `backend/data/logs/finance-tracker.log` records only operatio
 
 ## Manual provider check after a model change
 
-Automated tests verify application behavior; a real model still needs a small manual compatibility check after changing model or provider configuration. Run these in **Agent Run** mode, note pass/fail plus model name locally, and do not commit outputs containing personal finance data:
+Automated tests verify application behavior; a real model still needs a small manual compatibility check after changing model or provider configuration. Use the normal Assistant page, note pass/fail plus model name locally, and do not commit outputs containing personal finance data:
 
 1. Ask a one-tool question: “How much did I spend by category last month?”
 2. Ask a two-tool question: “Compare July and August 2026, then list my top merchants for August.”

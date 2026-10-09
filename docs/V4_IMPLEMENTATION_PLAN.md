@@ -1,6 +1,6 @@
 # V4 — Agentic Finance Workflows Implementation Plan
 
-**Status:** in progress — the bounded Agent Run endpoint, opt-in UI mode, sequential multi-tool execution, local evaluation coverage, and configurable cloud-provider adapters are implemented. The remaining work is evaluation expansion and final user-experience polish.
+**Status:** in progress — bounded Agent Run routing, sequential multi-tool execution, local evaluation coverage, configurable cloud-provider adapters, and reliability fallbacks are implemented. The remaining work is the selected-provider manual evaluation checklist and final closure review.
 
 V4 is not “give the model more permissions.” It is a controlled multi-step version of V3: the model may choose several existing read-only finance tools in sequence, under server-enforced limits, to answer questions that cannot be handled by one lookup.
 
@@ -128,7 +128,7 @@ Create a repeatable evaluation set with expected tool sequence and financial sem
 
 ## Proposed implementation sequence
 
-1. **Complete:** Add the `AgentRunRequest`, `AgentStep`, and `AgentRunResponse` records plus `/api/assistant/agent-runs`, without changing the V3 Assistant route. The Angular Assistant now has an opt-in **Agent Run** mode that renders the tool-step trace.
+1. **Complete:** Add the `AgentRunRequest`, `AgentStep`, and `AgentRunResponse` records plus `/api/assistant/agent-runs`. The Angular Assistant automatically chooses a single-step or bounded multi-step route; it shows human-readable activity only when a multi-step route is used.
 2. Implement a three-round sequential orchestrator using the existing LM Studio `RestClient` integration.
 3. Add argument schemas and tests for unknown tools, invalid arguments, and date/size/timeout limits.
 4. Expose a separate Angular “Agent run” experience that shows the final answer and human-readable tool trace.

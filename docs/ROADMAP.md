@@ -7,12 +7,13 @@
 - **V2:** accounts, transactions, Dashboard, history, trends, and reporting views.
 - **V2 polish:** utilization, statement snapshots, reminders, recurring activity, merchant spending.
 - **V3 foundation:** read-only finance tools, local LM Studio connection, and Assistant UI.
+- **V9:** persistent agent memory — backend-owned local conversations, bounded session context, refresh restoration, and explicit deletion. See [V9 memory delivery](V9_PERSISTENT_AGENT_MEMORY_PLAN.md).
 
 ## Current V4 work
 
 - Run bounded, multi-step, read-only analysis through the new Agent Run endpoint.
-- Validate sequential tool calls against a maintained evaluation set, including timeout, cancellation, and evidence behavior.
-- Keep the existing V3 Assistant as the simpler single-analysis experience while agent orchestration matures.
+- Re-run the selected-provider manual checklist after the latest grounding fixes, including traces, clarification, and safe failure behavior.
+- Close V4 only after those real-provider checks pass; synthetic evaluation coverage is already in place.
 
 ## Planned backlog
 
@@ -20,4 +21,4 @@
 - **V6:** cloud AI provider integrations — assess a targeted Spring AI or LangChain4j migration and optional AWS Bedrock, with explicit opt-in and minimum necessary data sent outside the computer. See GitHub Issue #19.
 - **V7:** multi-user and connected finance — introduce authentication, strict user data isolation, then evaluate optional Plaid connections. See GitHub Issue #20.
 - **V8:** mobile finance experience — decide between a responsive PWA and a native/cross-platform client after user identity and sync boundaries are established. See GitHub Issue #21.
-- **V9:** persistent agent memory — backend-owned local conversation history, bounded session context, and user-controlled retention. See GitHub Issue #22 and the [V9 memory plan](V9_PERSISTENT_AGENT_MEMORY_PLAN.md).
+- **V10:** explicit long-term Assistant preferences — local, visible, editable, and deletable preferences kept separate from chat history and ledger data. See [V10 plan](V10_EXPLICIT_MEMORY_PLAN.md).

@@ -1,6 +1,6 @@
 # V9 — Persistent Agent Memory
 
-**Status:** in progress — the local persistence slice now includes SQLite conversation tables, backend-owned IDs, bounded recent-message loading, structured session context, Assistant UI controls, and focused service/controller tests. The remaining validation is a live local API check after the backend is restarted with migration `V18`.
+**Status:** complete — SQLite conversation tables, backend-owned IDs, bounded recent-message loading, structured session context, Assistant UI controls, focused service/controller tests, and the live local API lifecycle check are complete.
 
 ## Goal
 
@@ -8,11 +8,11 @@ Make an Assistant conversation survive a browser refresh and let safe follow-up 
 
 For example, after asking “How much did I spend at Patel Brothers in July?”, a later “What about August?” should retain the merchant and resolve the new month without the person repeating the full question.
 
-## Current behavior
+## Delivered behavior
 
-The Angular Assistant page currently holds the visible transcript only in browser memory. On each request it sends its newest 12 user/assistant messages to Spring Boot. The page refreshes to an empty conversation, and messages older than the 12-message window are not sent to the model.
+The Angular Assistant restores the latest locally stored conversation after refresh. Spring Boot owns the opaque conversation ID, persists the full user-visible transcript in SQLite, and builds a prompt from the newest bounded message window plus structured session context. Older messages remain available for review but are not sent automatically to the model.
 
-This is a useful prototype, but it is neither durable session memory nor long-term user memory.
+This is durable session memory, not long-term personal memory.
 
 ## Definitions
 
@@ -160,7 +160,7 @@ In an interview, this can be described as a **stateful application around a stat
 - `AssistantControllerTest` verifies conversation creation/restoration routes and a server-loaded prompt context for a saved turn.
 - The Angular production build verifies the Assistant page’s refresh, new-conversation, and deliberate-delete controls compile successfully.
 
-The remaining live check is intentionally small and does not require a cloud or local model: create a conversation, retrieve it, delete it, and confirm that a later retrieval returns `404`. A model-backed follow-up check can then confirm that “What about August?” retains an earlier merchant context.
+The live local API lifecycle check has passed: create a conversation, retrieve it, delete it, then confirm a later retrieval returns `404`. A model-backed follow-up also confirmed that “What about August?” retains the earlier merchant context while calculating from date-filtered confirmed transactions.
 
 ## Out of scope
 

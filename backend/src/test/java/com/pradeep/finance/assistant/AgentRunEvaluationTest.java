@@ -192,6 +192,19 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void appliesTheResolvedPeriodBeforeExecutingAnAssistantModeCategoryLookup() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_category_spending\",\"arguments\":\"{}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"August category spending is ready.\"}"));
+        when(financeTools.categorySpending(any(), any())).thenReturn(List.of());
+
+        AssistantChatResponse result = service.chat("How much did I spend by category in August 2026?", List.of());
+
+        assertThat(result.toolsUsed()).containsExactly("get_category_spending");
+        verify(financeTools).categorySpending(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31));
+    }
+
+    @Test
     void executesTheDeterministicCreditPaydownToolForAStrictTargetQuestion() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
                 response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_paydown_plan\",\"arguments\":\"{\\\"targetUtilizationPercent\\\":10}\"}}]}"),

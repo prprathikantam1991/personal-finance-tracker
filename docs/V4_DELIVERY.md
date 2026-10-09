@@ -11,6 +11,7 @@
 - Multi-step traces are displayed in Angular as human-readable agent activity.
 - The Assistant screen now chooses the single-step or bounded multi-step route automatically; people ask naturally instead of selecting a technical “Assistant” or “Agent Run” mode. Agent activity remains visible only when the multi-step route is used.
 - Period context is preserved for date-sensitive calls, optional presentation hints are removed, and redundant undated calls are stopped before they broaden a lookup.
+- Assistant-mode tool calls receive the same server-side resolved-period normalization and validation as Agent Run calls, so a model cannot silently widen a month-specific question to all saved history.
 - LM Studio remains supported; Amazon Bedrock Mantle with Gemma 4 31B has been verified for real sequential tool use.
 - The Mantle adapter supports an optional provider reasoning-effort setting, enabling a like-for-like evaluation of Gemma 4 E2B with `BEDROCK_REASONING_EFFORT=high`.
 - Rolling local logs record safe operational metadata without recording prompts, answers, statements, transaction rows, or credentials.

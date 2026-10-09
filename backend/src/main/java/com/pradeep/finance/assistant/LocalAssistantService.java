@@ -170,7 +170,9 @@ public class LocalAssistantService {
         List<String> toolsUsed = new ArrayList<>();
         for (JsonNode call : calls) {
             String name = call.path("function").path("name").asText();
-            JsonNode arguments = parseArguments(call.path("function").path("arguments").asText("{}"));
+            JsonNode suppliedArguments = parseArguments(call.path("function").path("arguments").asText("{}"));
+            JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange), question);
+            validateAgentCall(name, arguments);
             Object result = execute(name, arguments);
             toolsUsed.add(name);
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));

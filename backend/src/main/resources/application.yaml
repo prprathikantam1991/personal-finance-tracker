@@ -15,6 +15,14 @@ spring:
     database-platform: org.hibernate.community.dialect.SQLiteDialect
   flyway:
     enabled: true
+  ai:
+    # V6 migration foundation. The current custom assistant remains the default path.
+    # Spring AI is opt-in until tool and provider parity are verified.
+    openai:
+      chat:
+        enabled: false
+      embedding:
+        enabled: false
 
 server:
   port: 8080

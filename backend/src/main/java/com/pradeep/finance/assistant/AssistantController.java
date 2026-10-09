@@ -35,7 +35,7 @@ public class AssistantController {
     @PostMapping("/conversations/{conversationId}/messages")
     public ConversationTurnResponse conversationTurn(@PathVariable String conversationId, @Valid @RequestBody ConversationTurnRequest request) {
         ConversationService.PromptContext prompt = conversationService.prepareTurn(conversationId, request.message());
-        if (request.agentMode()) {
+        if (needsMultiStepRun(request.message())) {
             AgentRunResponse response = localAssistantService.agentRun(request.message(), prompt.messages(), prompt.context());
             conversationService.completeTurn(conversationId, request.message(), response);
             return new ConversationTurnResponse(conversationId, response.answer(), response.toolsUsed(), response.model(), "AGENT_RUN", response.stopReason(), response.evidence(), response.steps());
@@ -43,5 +43,13 @@ public class AssistantController {
         AssistantChatResponse response = localAssistantService.chat(request.message(), prompt.messages(), prompt.context());
         conversationService.completeTurn(conversationId, request.message(), response);
         return new ConversationTurnResponse(conversationId, response.answer(), response.toolsUsed(), response.model(), response.executionMode(), null, response.evidence(), List.of());
+    }
+
+    /** Keeps orchestration an application decision so the normal UI never exposes a technical mode switch. */
+    private boolean needsMultiStepRun(String question) {
+        String normalized = question.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("compare") || normalized.contains(" then ")
+                || (normalized.contains(" and ") && (normalized.contains("merchant") || normalized.contains("utilization")
+                || normalized.contains("payment") || normalized.contains("recurring")));
     }
 }

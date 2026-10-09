@@ -1,6 +1,7 @@
 package com.pradeep.finance.assistant;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -102,5 +103,22 @@ class AssistantControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.conversationId").value("conversation-1"))
                 .andExpect(jsonPath("$.toolsUsed[0]").value("get_merchant_spending"));
+    }
+
+    @Test
+    void automaticallyUsesTheAgentPathForAMultiStepQuestion() throws Exception {
+        when(conversationService.prepareTurn(any(), any())).thenReturn(new ConversationService.PromptContext(List.of(), ConversationContext.empty()));
+        when(localAssistantService.agentRun(any(), any(), any())).thenReturn(new AgentRunResponse(
+                "July and August comparison.", List.of("compare_periods", "get_merchant_spending"),
+                List.of(new AgentStep(1, "compare_periods", "Completed"), new AgentStep(2, "get_merchant_spending", "Completed")),
+                "COMPLETED", "test-model", List.of("Verified local ledger data")));
+
+        mockMvc.perform(post("/api/assistant/conversations/conversation-1/messages").contentType("application/json")
+                        .content("{\"message\":\"Compare July and August, then show top merchants for August.\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.executionMode").value("AGENT_RUN"))
+                .andExpect(jsonPath("$.steps").isArray());
+
+        verify(localAssistantService).agentRun(any(), any(), any());
     }
 }

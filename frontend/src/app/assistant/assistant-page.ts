@@ -12,7 +12,6 @@ export class AssistantPage implements OnInit {
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
   protected readonly loadingConversation = signal(true);
-  protected readonly agentMode = signal(false);
   protected readonly error = signal<string | null>(null);
   protected readonly suggestions = [
     'What is my current total credit utilization?',
@@ -39,7 +38,7 @@ export class AssistantPage implements OnInit {
     this.messages.update(messages => [...messages, { role: 'user', text: question }]);
     this.draft.set(''); this.sending.set(true); this.error.set(null);
     const endpoint = `http://localhost:8080/api/assistant/conversations/${this.conversationId}/messages`;
-    this.http.post<AssistantReply>(endpoint, { message: question, agentMode: this.agentMode() }).subscribe({
+    this.http.post<AssistantReply>(endpoint, { message: question }).subscribe({
       next: reply => { this.messages.update(messages => [...messages, { role: 'assistant', text: reply.answer, toolsUsed: reply.toolsUsed, evidence: reply.evidence, steps: reply.steps }]); this.sending.set(false); },
       error: response => { this.error.set(this.assistantError(response.status, response.error?.detail)); this.sending.set(false); },
     });
@@ -50,7 +49,6 @@ export class AssistantPage implements OnInit {
     if (!window.confirm('Delete this conversation and its local history? This cannot be undone.')) return;
     this.http.delete(`http://localhost:8080/api/assistant/conversations/${this.conversationId}`).subscribe({ next: () => this.createConversation() });
   }
-  protected setAgentMode(enabled: boolean): void { this.agentMode.set(enabled); }
   private createConversation(): void {
     this.loadingConversation.set(true);
     this.messages.set([]);

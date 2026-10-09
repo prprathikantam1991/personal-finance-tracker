@@ -9,6 +9,7 @@
 - Spring Boot validates every requested tool, applies date and result-size limits, and permits at most three tool rounds.
 - Focused comparison tools return only the category and merchant evidence needed for a “why did this spending change?” question, instead of sending a broad transaction set to the model.
 - Multi-step traces are displayed in Angular as human-readable agent activity.
+- The Assistant screen now chooses the single-step or bounded multi-step route automatically; people ask naturally instead of selecting a technical “Assistant” or “Agent Run” mode. Agent activity remains visible only when the multi-step route is used.
 - Period context is preserved for date-sensitive calls, optional presentation hints are removed, and redundant undated calls are stopped before they broaden a lookup.
 - LM Studio remains supported; Amazon Bedrock Mantle with Gemma 4 31B has been verified for real sequential tool use.
 - The Mantle adapter supports an optional provider reasoning-effort setting, enabling a like-for-like evaluation of Gemma 4 E2B with `BEDROCK_REASONING_EFFORT=high`.

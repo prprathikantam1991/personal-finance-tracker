@@ -83,6 +83,8 @@ This choice was made after live endpoint verification on October 9, 2026. A sing
 
 Verification also established two application-level grounding rules that do not depend on model behavior: an otherwise undated “How much did I spend?” question receives a period clarification instead of silently defaulting to the current month, and merchant spending nets refunds before presenting merchant totals so its breakdown reconciles with the category total.
 
+Provider failure is handled as an intentional user-facing condition. The Assistant returns a safe RFC 9457 error detail without exposing raw provider payloads, tool definitions, ledger data, or credentials. An invalid Mantle token specifically asks the user to refresh the provider token and restart the backend.
+
 Gemma 4 31B is accessed through Mantle's OpenAI-compatible Chat Completions route, not Bedrock Converse. This is intentional: AWS currently lists Chat Completions and Responses for Gemma 4 31B/E2B, while Converse is unavailable for those models. The native Converse path remains a supported alternative for compatible models such as Claude.
 
 ## Safety contract

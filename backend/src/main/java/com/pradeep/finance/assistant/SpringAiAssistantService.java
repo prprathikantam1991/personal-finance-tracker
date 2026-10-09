@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import software.amazon.awssdk.awscore.exception.AwsServiceException;
+import org.springframework.ai.retry.NonTransientAiException;
 
 /**
  * Experimental V6 runtime for an OpenAI-compatible local model. Spring AI owns
@@ -61,8 +62,13 @@ public abstract class SpringAiAssistantService implements AssistantRuntime {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN,
                         "Amazon Bedrock denied this model request. Grant the selected local AWS identity bedrock:InvokeModel access to the selected model or inference profile, then try again.", exception);
             }
+            if (cause instanceof NonTransientAiException providerException
+                    && providerException.getMessage() != null && providerException.getMessage().contains("HTTP 401")) {
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "The selected AI provider rejected its access token. Refresh the provider token and restart the backend, then try again.", exception);
+            }
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "The Spring AI local runtime could not complete the request. Confirm LM Studio is running with a tool-capable model, then try again.", exception);
+                    "The selected AI provider could not complete the request. Check provider availability and credentials, then try again.", exception);
         }
     }
 

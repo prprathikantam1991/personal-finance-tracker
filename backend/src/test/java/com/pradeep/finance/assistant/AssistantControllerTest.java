@@ -76,6 +76,17 @@ class AssistantControllerTest {
     }
 
     @Test
+    void returnsASafeDetailForAssistantFailures() throws Exception {
+        when(localAssistantService.chat(any(), any()))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "The selected AI provider rejected its access token."));
+
+        mockMvc.perform(post("/api/assistant/chat").contentType("application/json")
+                        .content("{\"message\":\"Are you available?\",\"conversation\":[]}"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.detail").value("The selected AI provider rejected its access token."));
+    }
+
+    @Test
     void createsAndRestoresABackendOwnedConversation() throws Exception {
         ConversationResponse response = new ConversationResponse("conversation-1", "First question", Instant.parse("2026-10-08T12:00:00Z"),
                 Instant.parse("2026-10-08T12:00:00Z"), List.of(new ConversationMessageResponse("user", "Hello", null, List.of(), List.of(), List.of())));

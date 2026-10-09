@@ -62,3 +62,7 @@ flowchart LR
 - **Not expected** — a month before the first observed statement, or a future month in the current year. This prevents the tracker from claiming the user missed a statement before the application knew the account existed.
 
 When a parser cannot extract a statement cycle end, the tracker falls back first to the latest transaction date in that import and then to the import date. This makes coverage useful for older imports while clearly remaining an application record, rather than a claim about a bank's official statement schedule.
+
+## Bilt activity export
+
+Bilt's supplied CSV activity export is recognized by its transaction, posting-date, amount, and card-last-four columns. The importer identifies the most recent non-empty card ending as a Bilt credit card, preserves the raw merchant description when supplied, categorizes Bilt rent/housing charges as **Rent**, and treats Bilt housing payments as **Transfers**. CSV activity does not contain statement terms such as APR, minimum payment, or credit limit; those require a Bilt statement containing those fields.

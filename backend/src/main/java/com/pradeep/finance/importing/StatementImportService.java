@@ -38,6 +38,7 @@ public class StatementImportService {
     private static final Pattern DISCOVER_ACCOUNT_ENDING = Pattern.compile("(?i)account number ending in\\s+(\\d{4})");
     private static final Pattern WELLS_ACCOUNT_ENDING = Pattern.compile("(?i)account ending in\\s+(\\d{4})");
     private static final Pattern WELLS_CHECKING_ACCOUNT = Pattern.compile("(?i)account number:\\s*\\d*(\\d{4})");
+    private static final Pattern BILT_CSV_CARD_LAST_FOUR = Pattern.compile("(?m)^\\d{4}-\\d{2}-\\d{2},(?:[^,\\r\\n]*,){3}\\s*(\\d{4})\\s*,");
 
     private final StatementTextExtractor textExtractor;
     private final List<StatementTransactionParser> transactionParsers;
@@ -203,6 +204,12 @@ public class StatementImportService {
                                   LocalDate statementDate) {}
 
     private AccountIdentificationResponse identifyAccount(String text) {
+        Matcher biltAccountMatch = BILT_CSV_CARD_LAST_FOUR.matcher(text);
+        if ((text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT")) && biltAccountMatch.find()) {
+            String lastFour = biltAccountMatch.group(1);
+            return accountService.identifyOrCreate(new AccountIdentificationRequest(
+                    "Bilt", AccountType.CREDIT_CARD, lastFour, "Bilt •" + lastFour, "USD"));
+        }
         Matcher bankOfAmericaCardMatch = BOFA_CARD_NUMBER.matcher(text);
         if ((text.contains("Visa Signature") || text.contains("Total Credit Line")) && bankOfAmericaCardMatch.find()) {
             String lastFour = bankOfAmericaCardMatch.group(1);

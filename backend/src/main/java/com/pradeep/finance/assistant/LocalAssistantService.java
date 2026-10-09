@@ -117,7 +117,7 @@ public class LocalAssistantService {
                     return agentStopped("The local model did not request finance data for this question. Try a more specific question or use a tool-capable model in LM Studio.",
                             toolsUsed, steps, resolvedRange, "NO_TOOL_REQUESTED");
                 }
-                return new AgentRunResponse(content(assistantMessage), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+                return new AgentRunResponse(completeFinalAnswer(messages, modelResponse), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
             }
             if (calls.size() != 1) return agentStopped("The local model requested more than one tool at once. Please try the question again.", toolsUsed, steps, resolvedRange, "MULTIPLE_TOOLS_REQUESTED");
 
@@ -126,14 +126,12 @@ public class LocalAssistantService {
             try {
                 JsonNode suppliedArguments = parseArguments(call.path("function").path("arguments").asText("{}"));
                 if (isUndatedRepeat(name, suppliedArguments, toolsUsed)) {
-                    JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
-                    return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+                    return new AgentRunResponse(completeFinalAnswer(messages), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
                 JsonNode arguments = normalizeArguments(name, suppliedArguments, rangeForTool(name, question, resolvedRange), question);
                 validateAgentCall(name, arguments);
                 if (!completedCalls.add(name + ":" + json(arguments))) {
-                    JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
-                    return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
+                    return new AgentRunResponse(completeFinalAnswer(messages), List.copyOf(toolsUsed), List.copyOf(steps), "COMPLETED", model, evidence(resolvedRange, toolsUsed));
                 }
                 Object result = execute(name, arguments);
                 String resultJson = json(result);
@@ -142,13 +140,13 @@ public class LocalAssistantService {
                 steps.add(new AgentStep(round, name, "Completed"));
                 messages.add(objectMapper.convertValue(assistantMessage, Map.class));
                 messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", resultJson));
+                categoryComparisonFact(name, result).ifPresent(fact -> messages.add(message("system", fact)));
             } catch (ResponseStatusException exception) {
                 steps.add(new AgentStep(round, name.isBlank() ? "unknown" : name, "Rejected"));
                 return agentStopped(exception.getReason(), toolsUsed, steps, resolvedRange, "VALIDATION_STOP");
             }
         }
-        JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
-        return new AgentRunResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), List.copyOf(steps), "TOOL_BUDGET_REACHED", model, evidence(resolvedRange, toolsUsed));
+        return new AgentRunResponse(completeFinalAnswer(messages), List.copyOf(toolsUsed), List.copyOf(steps), "TOOL_BUDGET_REACHED", model, evidence(resolvedRange, toolsUsed));
     }
 
     private AgentRunResponse agentStopped(String answer, List<String> tools, List<AgentStep> steps, DateRange range, String stopReason) {
@@ -176,9 +174,9 @@ public class LocalAssistantService {
             Object result = execute(name, arguments);
             toolsUsed.add(name);
             messages.add(Map.of("role", "tool", "tool_call_id", call.path("id").asText(), "content", json(result)));
+            categoryComparisonFact(name, result).ifPresent(fact -> messages.add(message("system", fact)));
         }
-        JsonNode finalResponse = complete(messages, false, finalAnswerMaxTokens);
-        return new AssistantChatResponse(content(finalResponse.path("choices").path(0).path("message")), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL", evidence(resolvedRange, toolsUsed));
+        return new AssistantChatResponse(completeFinalAnswer(messages), List.copyOf(toolsUsed), model, "MODEL_TOOL_CALL", evidence(resolvedRange, toolsUsed));
     }
 
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation) {
@@ -323,6 +321,51 @@ public class LocalAssistantService {
     /** Tool-choice turns need compact structured output; reserve the larger budget for the final explanation. */
     private JsonNode complete(List<Map<String, Object>> messages, boolean includeTools, int maxTokens) {
         return localModelClient.complete(messages, includeTools ? toolDefinitions() : null, maxTokens);
+    }
+
+    /**
+     * A provider can stop because it reached its output budget. Do not show an
+     * unfinished financial answer as though it were complete: regenerate once
+     * from the already-verified tool results with a concise-answer instruction.
+     */
+    private String completeFinalAnswer(List<Map<String, Object>> messages) {
+        JsonNode response = complete(messages, false, finalAnswerMaxTokens);
+        return completeFinalAnswer(messages, response);
+    }
+
+    private String completeFinalAnswer(List<Map<String, Object>> messages, JsonNode response) {
+        String answer = content(response.path("choices").path(0).path("message"));
+        if (!isIncomplete(response, answer)) return answer;
+
+        List<Map<String, Object>> retryMessages = new ArrayList<>(messages);
+        retryMessages.add(message("system", "Regenerate the final answer now using the verified tool results already provided. Be concise, answer every requested part, and do not leave a sentence, list item, table row, or amount unfinished. Do not call more tools."));
+        JsonNode retry = complete(retryMessages, false, Math.max(finalAnswerMaxTokens, 1600));
+        String retryAnswer = content(retry.path("choices").path(0).path("message"));
+        return isIncomplete(retry, retryAnswer)
+                ? "The model stopped before it could produce a complete answer. Please try the question again."
+                : retryAnswer;
+    }
+
+    private boolean isIncomplete(JsonNode response, String answer) {
+        String finishReason = response.path("choices").path(0).path("finish_reason").asText("");
+        if ("length".equalsIgnoreCase(finishReason)) return true;
+        String trimmed = answer == null ? "" : answer.trim();
+        return trimmed.endsWith(":") || trimmed.endsWith(",") || trimmed.endsWith("\\") || trimmed.endsWith("**");
+    }
+
+    /** Adds an application-calculated direction so the model cannot invert first versus second period. */
+    private Optional<String> categoryComparisonFact(String toolName, Object result) {
+        if (!("compare_category_spending".equals(toolName) && result instanceof FinanceToolsService.CategoryComparison comparison)) {
+            return Optional.empty();
+        }
+        BigDecimal first = comparison.selectedPeriod().amount();
+        BigDecimal second = comparison.comparisonPeriod().amount();
+        BigDecimal difference = second.subtract(first).abs();
+        String direction = second.compareTo(first) > 0 ? "increased" : second.compareTo(first) < 0 ? "decreased" : "did not change";
+        return Optional.of("APPLICATION-CALCULATED CATEGORY COMPARISON: " + comparison.category() + " spending " + direction
+                + " from " + money(first) + " for " + comparison.selectedPeriod().from() + " through " + comparison.selectedPeriod().to()
+                + " to " + money(second) + " for " + comparison.comparisonPeriod().from() + " through " + comparison.comparisonPeriod().to()
+                + ". Change from first period to second period: " + money(difference) + ". State this direction exactly; do not describe a decrease as an increase.");
     }
 
     private Object execute(String name, JsonNode args) {

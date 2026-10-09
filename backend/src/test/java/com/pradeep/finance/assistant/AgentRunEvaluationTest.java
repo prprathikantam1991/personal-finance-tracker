@@ -129,6 +129,22 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void retriesAnOutputBudgetTruncationInsteadOfReturningAPartialFinancialAnswer() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}}]}"),
+                responseWithFinishReason("{\"role\":\"assistant\",\"content\":\"Your utilization is:\"}", "length"),
+                response("{\"role\":\"assistant\",\"content\":\"Your overall credit utilization is 20%.\"}"));
+        when(financeTools.creditUtilization()).thenReturn(new FinanceToolsService.CreditUtilization(
+                BigDecimal.valueOf(10_000), BigDecimal.valueOf(2_000), BigDecimal.valueOf(8_000),
+                BigDecimal.valueOf(20), BigDecimal.valueOf(18), 1, 1, List.of()));
+
+        AgentRunResponse result = service.agentRun("What is my overall credit utilization?", List.of());
+
+        assertThat(result.answer()).isEqualTo("Your overall credit utilization is 20%.");
+        verify(localModelClient, times(3)).complete(any(), any(), anyInt());
+    }
+
+    @Test
     void stopsBeforeExecutingWhenTheModelRequestsMultipleToolsInOneRound() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"tool_calls\":["
                 + "{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_utilization\",\"arguments\":\"{}\"}},"
@@ -296,5 +312,9 @@ class AgentRunEvaluationTest {
 
     private JsonNode response(String message) throws Exception {
         return objectMapper.readTree("{\"choices\":[{\"message\":" + message + "}]}");
+    }
+
+    private JsonNode responseWithFinishReason(String message, String finishReason) throws Exception {
+        return objectMapper.readTree("{\"choices\":[{\"message\":" + message + ",\"finish_reason\":\"" + finishReason + "\"}]}");
     }
 }

@@ -87,7 +87,9 @@ public class StatementImportService {
                 resultSet -> resultSet.next() ? resultSet.getString(1) : null, sourceHash);
         if (existingImportId != null) {
             refreshStatementSummary(existingImportId, statementSummary);
-            backfillPreviouslyEmptyImport(existingImportId, accountIdentification.account() == null ? null : accountIdentification.account().id(), transactions);
+            String accountId = accountIdentification.account() == null ? null : accountIdentification.account().id();
+            associateImportWithAccountIfMissing(existingImportId, accountId);
+            backfillPreviouslyEmptyImport(existingImportId, accountId, transactions);
             reconcileBiltTransactions(existingImportId, transactions, accountIdsBySourceLastFour);
             return new StatementImportResponse(existingImportId, sanitizeFilename(statement.getOriginalFilename()), ImportStatus.REVIEW_REQUIRED,
                     accountIdentification, transactions, List.of("This exact statement was already imported. No duplicate transactions were added."));
@@ -122,7 +124,11 @@ public class StatementImportService {
         transferDetectionService.detectTransfers();
 
         List<String> warnings = new ArrayList<>();
-        if (transactions.isEmpty()) warnings.add("No transactions could be read from this statement format yet. You can use a CSV export, or add a parser for this institution.");
+        if (transactions.isEmpty()) {
+            warnings.add(hasStatementSnapshot(statementSummary)
+                    ? "This statement has no activity rows, but its account snapshot was saved."
+                    : "No transactions could be read from this statement format yet. You can use a CSV export, or add a parser for this institution.");
+        }
         if (duplicatesSkipped > 0) warnings.add(duplicatesSkipped + " duplicate transaction" + (duplicatesSkipped == 1 ? " was" : "s were") + " skipped.");
         if (accountIdentification.status() == AccountIdentificationResponse.AccountMatchStatus.CONFIRMATION_REQUIRED) warnings.add("Account confirmation will be added to the review step before transactions can be finalized.");
         return new StatementImportResponse(importId, originalFilename, ImportStatus.REVIEW_REQUIRED, accountIdentification, transactions, warnings);
@@ -322,6 +328,24 @@ public class StatementImportService {
                 ImportStatus.CONFIRMED.name(), importId, ImportStatus.REVIEW_REQUIRED.name());
     }
 
+    /**
+     * A statement with no activity can still be useful when it contains a valid balance, limit,
+     * due date, or statement-period snapshot for a known account. The watched folder may safely
+     * archive those statements after saving the snapshot; unrecognized zero-row files still stay
+     * in the inbox for review.
+     */
+    @Transactional(readOnly = true)
+    public boolean isRecognizedStatementSnapshot(String importId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                SELECT COUNT(*) FROM statement_imports
+                WHERE id = ? AND account_id IS NOT NULL
+                  AND (statement_balance IS NOT NULL OR credit_limit IS NOT NULL OR available_credit IS NOT NULL
+                       OR minimum_payment IS NOT NULL OR payment_due_date IS NOT NULL
+                       OR cycle_start_date IS NOT NULL OR cycle_end_date IS NOT NULL)
+                """, Integer.class, importId);
+        return count != null && count > 0;
+    }
+
     /** Reconciles older imports created before watched-folder imports were auto-confirmed. */
     @Transactional
     public int confirmTrustedImports() {
@@ -362,6 +386,12 @@ public class StatementImportService {
                 .orElseGet(StatementSummary::empty);
     }
 
+    private boolean hasStatementSnapshot(StatementSummary summary) {
+        return summary.statementBalance() != null || summary.creditLimit() != null || summary.availableCredit() != null
+                || summary.minimumPayment() != null || summary.paymentDueDate() != null
+                || summary.cycleStartDate() != null || summary.cycleEndDate() != null;
+    }
+
     private String dateString(java.time.LocalDate date) { return date == null ? null : date.toString(); }
 
     private void refreshStatementSummary(String importId, StatementSummary summary) {
@@ -372,6 +402,11 @@ public class StatementImportService {
                 """, summary.statementBalance(), summary.creditLimit(), summary.availableCredit(), summary.feesCharged(), summary.interestCharged(),
                 summary.minimumPayment(), dateString(summary.paymentDueDate()), dateString(summary.cycleStartDate()), dateString(summary.cycleEndDate()),
                 summary.beginningBalance(), summary.totalCredits(), summary.totalDebits(), summary.interestEarned(), summary.annualInterestRate(), summary.annualPercentageYield(), importId);
+    }
+
+    private void associateImportWithAccountIfMissing(String importId, String accountId) {
+        if (accountId == null) return;
+        jdbcTemplate.update("UPDATE statement_imports SET account_id = ? WHERE id = ? AND account_id IS NULL", accountId, importId);
     }
 
     private void backfillPreviouslyEmptyImport(String importId, String accountId, List<ParsedTransaction> transactions) {

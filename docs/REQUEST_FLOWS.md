@@ -45,6 +45,8 @@ Incoming folder scan → validate file → import pipeline
 → ambiguity or parsing issue remains visible for attention
 ```
 
+A recognized statement that contains a usable account snapshot but **no transaction activity** is also confirmed and archived. For example, a zero-balance credit-card statement can still update the saved limit, available credit, APR, due date, and statement period. An unrecognized zero-row file remains in the inbox rather than being silently accepted.
+
 ## Statement coverage tracker
 
 ```mermaid

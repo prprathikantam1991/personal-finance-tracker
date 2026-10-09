@@ -42,10 +42,11 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - Keep all Spring AI model auto-configuration disabled by default.
    - Document the scope, security boundary, provider strategy, and rollback plan.
 
-2. **Tool facade**
+2. **Tool facade — complete**
    - Expose a separate Spring AI `@Tool` facade over `FinanceToolsService`.
    - Preserve bounded inputs, result-size limits, confirmed-transaction filtering, and calculation logic.
    - Do not expose repositories, SQL, import operations, filesystem operations, or write methods.
+   - `SpringAiFinanceTools` exposes the same eleven named read-only operations already approved for the Assistant. It delegates every call to `FinanceToolsService`, so the established filtering, calculation, and size-limit behavior remains the single implementation of record.
 
 3. **Local-provider parity path**
    - Add an opt-in Spring AI OpenAI-compatible configuration for LM Studio.
@@ -84,6 +85,20 @@ sequenceDiagram
 ```
 
 Spring AI simplifies provider and tool-call plumbing; it does not replace application validation, tool limits, evidence, audit traces, or trusted calculations.
+
+## Tool façade boundary
+
+The Spring AI façade is intentionally a thin adapter, not a second finance domain layer:
+
+```mermaid
+flowchart LR
+    M[Model requests a named tool] --> F[SpringAiFinanceTools]
+    F --> S[FinanceToolsService]
+    S --> D[Existing read-only services]
+    D --> L[(Confirmed local ledger)]
+```
+
+It publishes these eleven operations: monthly summary, category spending, merchant spending, recurring activity, account overview, account history, period comparison, category comparison, credit utilization, credit paydown planning, and bounded transaction search. The façade has no repository dependency and exposes no import, file, SQL, payment, or other write operation.
 
 ## Configuration and privacy
 

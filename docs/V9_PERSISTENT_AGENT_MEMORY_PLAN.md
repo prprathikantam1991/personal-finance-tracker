@@ -114,7 +114,7 @@ V9 does not automatically create durable personal facts from messages. If a late
 
 ## Correctness rule for remembered merchant follow-ups
 
-When a person asks for spending at one named merchant, including a follow-up such as “What about August?”, Spring Boot resolves the remembered merchant and date range, then calculates the amount from date-filtered confirmed transaction rows. It does not use the aggregate **Top merchants** lookup for this question type. This prevents a model from mistaking a period-wide top-merchant total for the requested merchant’s total.
+When a person asks for spending at one named merchant, including a follow-up such as “What about August?” or shorthand such as “Patel Brothers July,” Spring Boot resolves the merchant and date range, then calculates the amount from date-filtered confirmed transaction rows. It does not use the aggregate **Top merchants** lookup for this question type. This prevents a model from mistaking a period-wide top-merchant total for the requested merchant’s total.
 
 ## Spring AI and LangChain4j assessment
 

@@ -83,6 +83,23 @@ class ConversationServiceTest {
     }
 
     @Test
+    void savesTheMerchantWhenThePersonUsesMerchantAndMonthShorthand() throws Exception {
+        AssistantMemorySummary summary = summary("""
+                {"from":null,"to":null,"merchant":null,"category":null,"accountId":null,"unresolvedQuestion":null}
+                """);
+        when(messages.countByConversationId(CONVERSATION_ID)).thenReturn(1L);
+        when(summaries.findById(CONVERSATION_ID)).thenReturn(Optional.of(summary));
+
+        service.completeTurn(CONVERSATION_ID, "Patel Brothers July", new AssistantChatResponse(
+                "Confirmed total.", List.of("search_transactions"), "test-model", "FALLBACK", List.of("Confirmed data")));
+
+        JsonNode context = objectMapper.readTree(summary.getStructuredContext());
+        assertThat(context.get("merchant").asText()).isEqualTo("Patel Brothers");
+        assertThat(context.get("from").asText()).isEqualTo("2026-07-01");
+        assertThat(context.get("to").asText()).isEqualTo("2026-07-31");
+    }
+
+    @Test
     void restoresStoredMessageMetadataForTheVisibleTranscript() {
         when(messages.findByConversationIdOrderBySequenceNumberAsc(CONVERSATION_ID)).thenReturn(List.of(
                 AssistantMessage.create(CONVERSATION_ID, 1, "assistant", "Grounded answer", "AGENT_RUN",

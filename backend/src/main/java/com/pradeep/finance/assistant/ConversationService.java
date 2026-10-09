@@ -22,6 +22,7 @@ public class ConversationService {
     private static final int PROMPT_MESSAGE_LIMIT = 12;
     private static final Pattern MONTH_NAME = Pattern.compile("(?i)\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private static final Pattern MERCHANT = Pattern.compile("(?i)\\bat\\s+(.+?)(?=\\s+(?:for|in|during)\\b|[?!.]?$)");
+    private static final Pattern MERCHANT_MONTH_SHORTHAND = Pattern.compile("(?i)^\\s*(.+?)\\s+(?:in\\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\\s+\\d{4})?\\s*[?!.]?\\s*$");
     private final AssistantConversationRepository conversations;
     private final AssistantMessageRepository messages;
     private final AssistantMemorySummaryRepository summaries;
@@ -99,7 +100,7 @@ public class ConversationService {
         ConversationContext current = loadContext(conversationId);
         ConversationContext updated = new ConversationContext(
                 monthFrom(question, true, current.from()), monthFrom(question, false, current.to()),
-                firstMatch(MERCHANT, question, current.merchant()), category(question, current.category()), current.accountId(), null);
+                merchantFrom(question, current.merchant()), category(question, current.category()), current.accountId(), null);
         AssistantMemorySummary summary = summaries.findById(conversationId)
                 .orElseGet(() -> AssistantMemorySummary.create(conversationId, json(ConversationContext.empty())));
         summary.update(json(updated));
@@ -115,6 +116,14 @@ public class ConversationService {
 
     private int monthNumber(String name) { return java.time.Month.valueOf(name.toUpperCase(Locale.ROOT)).getValue(); }
     private String firstMatch(Pattern pattern, String value, String fallback) { Matcher matcher = pattern.matcher(value.trim()); return matcher.find() ? matcher.group(1).trim() : fallback; }
+    private String merchantFrom(String question, String fallback) {
+        String explicit = firstMatch(MERCHANT, question, null);
+        if (explicit != null) return explicit;
+        Matcher shorthand = MERCHANT_MONTH_SHORTHAND.matcher(question);
+        if (!shorthand.matches()) return fallback;
+        String candidate = shorthand.group(1).trim();
+        return candidate.split("\\s+").length >= 2 && !candidate.toLowerCase(Locale.ROOT).matches(".*\\b(how|what|show|list|spend|spent|spending|expense|expenses)\\b.*") ? candidate : fallback;
+    }
     private String category(String question, String fallback) {
         String normalized = question.toLowerCase(Locale.ROOT);
         return List.of("Auto & Transport", "Fitness", "Food & Drinks", "Gas & Fuel", "Groceries", "India Remittance", "Income", "Investments", "Rent", "Restaurants", "Shopping", "Transfer", "Travel", "Uncategorized", "Utilities")

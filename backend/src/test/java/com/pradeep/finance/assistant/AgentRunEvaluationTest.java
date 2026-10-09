@@ -177,6 +177,21 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void treatsNamedMerchantAndMonthShorthandAsAnExactLedgerLookup() {
+        when(financeTools.searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 7, 1)), eq(java.time.LocalDate.of(2026, 7, 31)), eq(null), eq("Patel Brothers")))
+                .thenReturn(List.of(new com.pradeep.finance.transaction.TransactionResponse(
+                        "transaction-1", "account-1", "Sample Card", com.pradeep.finance.account.AccountType.CREDIT_CARD,
+                        java.time.LocalDate.of(2026, 7, 18), "PATEL BROTHERS", "Patel Brothers", BigDecimal.valueOf(49.31),
+                        null, "Groceries", "HIGH", null, "CONFIRMED")));
+
+        AssistantChatResponse result = service.chat("Patel Brothers July", List.of());
+
+        assertThat(result.answer()).contains("$49.31").contains("1 transaction");
+        assertThat(result.toolsUsed()).containsExactly("search_transactions");
+        verify(localModelClient, never()).complete(any(), any(), anyInt());
+    }
+
+    @Test
     void executesTheDeterministicCreditPaydownToolForAStrictTargetQuestion() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
                 response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_credit_paydown_plan\",\"arguments\":\"{\\\"targetUtilizationPercent\\\":10}\"}}]}"),

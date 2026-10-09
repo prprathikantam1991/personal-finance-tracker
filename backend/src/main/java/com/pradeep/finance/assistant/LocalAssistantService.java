@@ -28,6 +28,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 public class LocalAssistantService {
     private static final Pattern MONTH_NAME = Pattern.compile("(?i)\\b(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private static final Pattern MERCHANT = Pattern.compile("(?i)\\bat\\s+(.+?)(?=\\s+(?:for|in|during)\\b|[?!.]?$)");
+    private static final Pattern MERCHANT_MONTH_SHORTHAND = Pattern.compile("(?i)^\\s*(.+?)\\s+(?:in\\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\\s+\\d{4})?\\s*[?!.]?\\s*$");
     private static final Pattern MERCHANT_PERIOD = Pattern.compile("(?i)\\bmerchants?\\b[^?!.]{0,80}?\\b(?:for|in|during)\\s+(january|february|march|april|may|june|july|august|september|october|november|december)\\b");
     private final FinanceToolsService financeTools;
     private final ObjectMapper objectMapper;
@@ -267,7 +268,14 @@ public class LocalAssistantService {
         return new DateRange(first.atDay(1), last.atEndOfMonth());
     }
     private int monthNumber(String name) { return java.time.Month.valueOf(name.toUpperCase(Locale.ROOT)).getValue(); }
-    private String merchant(String question) { Matcher matcher = MERCHANT.matcher(question.trim()); return matcher.find() ? matcher.group(1).trim() : null; }
+    private String merchant(String question) {
+        Matcher matcher = MERCHANT.matcher(question.trim());
+        if (matcher.find()) return matcher.group(1).trim();
+        Matcher shorthand = MERCHANT_MONTH_SHORTHAND.matcher(question);
+        if (!shorthand.matches()) return null;
+        String candidate = shorthand.group(1).trim();
+        return isNamedMerchant(candidate) ? candidate : null;
+    }
     private String resolveMerchant(String question, List<AssistantConversationMessage> conversation) {
         return resolveMerchant(question, conversation, ConversationContext.empty());
     }
@@ -285,7 +293,14 @@ public class LocalAssistantService {
     private boolean isExactMerchantSpendingQuestion(String question, String merchant) {
         if (merchant == null || merchant.isBlank()) return false;
         String normalized = question.toLowerCase(Locale.ROOT);
-        return normalized.matches(".*\\b(spend|spent|spending|expense|expenses)\\b.*") || usesPriorContext(question);
+        return normalized.matches(".*\\b(spend|spent|spending|expense|expenses)\\b.*") || usesPriorContext(question)
+                || MERCHANT_MONTH_SHORTHAND.matcher(question).matches();
+    }
+    private boolean isNamedMerchant(String candidate) {
+        String normalized = candidate.toLowerCase(Locale.ROOT);
+        if (candidate.trim().split("\\s+").length < 2 || normalized.matches(".*\\b(how|what|show|list|spend|spent|spending|expense|expenses)\\b.*")) return false;
+        return List.of("auto & transport", "fitness", "food & drinks", "gas & fuel", "groceries", "india remittance", "income", "investments", "rent", "restaurants", "shopping", "transfer", "travel", "uncategorized", "utilities")
+                .stream().noneMatch(normalized::equals);
     }
     private boolean needsPeriodClarification(String question, DateRange range) {
         if (range != null) return false;

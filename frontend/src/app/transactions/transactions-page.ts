@@ -81,6 +81,7 @@ export class TransactionsPage implements OnInit {
   protected selectedCount(): number { return this.visibleTransactions().filter(transaction => this.selectedTransactionIds().has(transaction.id) && this.isBulkEligible(transaction)).length; }
   protected hasBulkEligibleTransactions(): boolean { return this.visibleTransactions().some(transaction => this.isBulkEligible(transaction)); }
   protected allEligibleVisibleSelected(): boolean { const eligible = this.visibleTransactions().filter(transaction => this.isBulkEligible(transaction)); return eligible.length > 0 && eligible.every(transaction => this.selectedTransactionIds().has(transaction.id)); }
+  protected clearSelection(): void { this.selectedTransactionIds.set(new Set()); }
   protected saveBulkCategory(category: string, rememberForFuture: boolean): void {
     const ids = this.visibleTransactions().filter(transaction => this.selectedTransactionIds().has(transaction.id) && this.isBulkEligible(transaction)).map(transaction => transaction.id);
     if (!ids.length) return;

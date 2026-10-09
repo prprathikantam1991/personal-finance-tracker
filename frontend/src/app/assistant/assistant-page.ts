@@ -1,5 +1,6 @@
 import { Component, ElementRef, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import { ActivatedRoute, Router } from '@angular/router';
 import { formatAssistantMarkdown } from './assistant-markdown';
 
 interface AssistantReply { conversationId?: string; answer: string; toolsUsed: string[]; model: string; executionMode?: string; stopReason?: string; evidence: string[]; steps?: { number: number; tool: string; outcome: string }[]; }
@@ -9,6 +10,8 @@ interface Conversation { id: string; messages: Array<ChatMessage>; }
 @Component({ selector: 'app-assistant-page', imports: [], templateUrl: './assistant-page.html', styleUrl: './assistant-page.scss' })
 export class AssistantPage implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly route = inject(ActivatedRoute);
+  private readonly router = inject(Router);
   @ViewChild('composer') private composer?: ElementRef<HTMLElement>;
   protected readonly messages = signal<ChatMessage[]>([]);
   protected readonly draft = signal('');
@@ -22,8 +25,13 @@ export class AssistantPage implements OnInit {
     'What recurring activity have you found?',
   ];
   private conversationId: string | null = null;
+  private pendingQuestion: string | null = null;
 
   ngOnInit(): void {
+    this.route.queryParamMap.subscribe(params => {
+      const question = params.get('ask')?.trim();
+      if (question) { this.pendingQuestion = question; this.submitPendingQuestion(); }
+    });
     const storedId = localStorage.getItem('finance-tracker-assistant-conversation');
     if (storedId) {
       this.http.get<Conversation>(`http://localhost:8080/api/assistant/conversations/${storedId}`).subscribe({
@@ -74,6 +82,15 @@ export class AssistantPage implements OnInit {
     this.messages.set(conversation.messages);
     this.loadingConversation.set(false); this.error.set(null);
     if (conversation.messages.length) this.scrollToComposer();
+    this.submitPendingQuestion();
+  }
+  private submitPendingQuestion(): void {
+    if (!this.pendingQuestion || !this.conversationId || this.sending() || this.loadingConversation()) return;
+    const question = this.pendingQuestion;
+    this.pendingQuestion = null;
+    this.router.navigate([], { relativeTo: this.route, queryParams: { ask: null }, queryParamsHandling: 'merge', replaceUrl: true });
+    this.draft.set(question);
+    this.ask();
   }
   /** Keep the active question box in view after restoring or extending a conversation. */
   private scrollToComposer(): void {
@@ -82,8 +99,9 @@ export class AssistantPage implements OnInit {
   private assistantError(status: number, detail?: string): string {
     if (status === 504) return 'Your local model is taking longer than expected. It may still be loading—wait a moment and try again.';
     if (status === 502) return 'Your local model returned an unusable response. Try again, or reload the model in LM Studio.';
-    if (status === 503 || status === 0) return 'LM Studio is not ready. Start its local server and load a model, then try again.';
-    return detail ?? 'The local assistant could not respond. Please try again.';
+    if (detail) return detail;
+    if (status === 503 || status === 0) return 'The selected AI provider is unavailable. Check its connection and credentials, then try again.';
+    return 'The Assistant could not respond. Please try again.';
   }
   protected toolLabel(tool: string): string {
     const labels: Record<string, string> = { get_monthly_summary: 'Monthly summary', get_category_spending: 'Category spending', get_merchant_spending: 'Top merchants', get_credit_utilization: 'Credit utilization', get_credit_paydown_plan: 'Credit paydown plan', get_recurring_activity: 'Recurring activity', get_account_overview: 'Account overview', get_account_history: 'Account history', compare_periods: 'Compare periods', compare_category_spending: 'Compare category spending', search_transactions: 'Search transactions' };

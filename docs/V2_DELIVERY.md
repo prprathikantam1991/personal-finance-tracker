@@ -14,6 +14,14 @@ V2 turned the trusted ledger into a useful day-to-day finance application.
 - Category spending, merchant spending, cash-flow trends, and period comparisons.
 - Notifications for statement dates, due dates, promotional APR expiry, and recurring activity.
 
+## Current interaction polish
+
+Each cash-flow metric now includes its own change from the prior period, keeping the current value and comparison in the same place rather than creating a separate comparison section.
+
+The application shell provides the primary daily entry points: a persistent **Ask Finance AI** bar opens a full conversation only after a question is entered, and a notification bell shows the most urgent reminders in a compact popover. The full Assistant and reminder screens remain available as deeper views, but they are no longer primary navigation destinations.
+
+Transaction bulk categorization is contextual: it appears only after one or more rows are selected, then provides a compact category action, optional merchant-memory rule, and cancel control.
+
 ## Financial semantics
 
 Dashboard and reporting calculations use confirmed transactions. Transfers are excluded from spending. India remittance is presented separately from ordinary expenses so it can be understood without hiding the cash movement.

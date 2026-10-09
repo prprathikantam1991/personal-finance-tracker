@@ -48,6 +48,7 @@ The Imports page is deliberately organized around two grids: a year-selectable s
 - Watched-folder statement imports with local archive handling.
 - Account balances, card terms, statement activity, utilization, and historical snapshots.
 - Transaction search and filtering, Dashboard summaries/trends, merchant spending, recurring detection, and reminders.
+- A global **Ask Finance AI** launcher and notification tray, keeping common AI and reminder actions available without leaving the current tracker view.
 - Local LM Studio AI Assistant with structured tool calling, automatic single-step versus multi-step routing, safely formatted answers, and visible data-used evidence.
 - Local, persistent Assistant conversations with backend-owned IDs, bounded session context, refresh restoration, and explicit deletion.
 - Opt-in Amazon Bedrock Runtime adapter for Claude Haiku 4.5 and other Converse-compatible models; finance tools remain local and read-only.

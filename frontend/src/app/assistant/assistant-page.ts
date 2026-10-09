@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, ElementRef, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { formatAssistantMarkdown } from './assistant-markdown';
 
@@ -9,6 +9,7 @@ interface Conversation { id: string; messages: Array<ChatMessage>; }
 @Component({ selector: 'app-assistant-page', imports: [], templateUrl: './assistant-page.html', styleUrl: './assistant-page.scss' })
 export class AssistantPage implements OnInit {
   private readonly http = inject(HttpClient);
+  @ViewChild('composer') private composer?: ElementRef<HTMLElement>;
   protected readonly messages = signal<ChatMessage[]>([]);
   protected readonly draft = signal('');
   protected readonly sending = signal(false);
@@ -43,10 +44,11 @@ export class AssistantPage implements OnInit {
     const question = this.draft().trim();
     if (!question || this.sending() || !this.conversationId) return;
     this.messages.update(messages => [...messages, { role: 'user', text: question }]);
+    this.scrollToComposer();
     this.draft.set(''); this.sending.set(true); this.error.set(null);
     const endpoint = `http://localhost:8080/api/assistant/conversations/${this.conversationId}/messages`;
     this.http.post<AssistantReply>(endpoint, { message: question }).subscribe({
-      next: reply => { this.messages.update(messages => [...messages, { role: 'assistant', text: reply.answer, toolsUsed: reply.toolsUsed, evidence: reply.evidence, steps: reply.steps }]); this.sending.set(false); },
+      next: reply => { this.messages.update(messages => [...messages, { role: 'assistant', text: reply.answer, toolsUsed: reply.toolsUsed, evidence: reply.evidence, steps: reply.steps }]); this.sending.set(false); this.scrollToComposer(); },
       error: response => { this.error.set(this.assistantError(response.status, response.error?.detail)); this.sending.set(false); },
     });
   }
@@ -70,6 +72,11 @@ export class AssistantPage implements OnInit {
     localStorage.setItem('finance-tracker-assistant-conversation', conversation.id);
     this.messages.set(conversation.messages);
     this.loadingConversation.set(false); this.error.set(null);
+    if (conversation.messages.length) this.scrollToComposer();
+  }
+  /** Keep the active question box in view after restoring or extending a conversation. */
+  private scrollToComposer(): void {
+    window.setTimeout(() => this.composer?.nativeElement.scrollIntoView({ behavior: 'auto', block: 'end' }));
   }
   private assistantError(status: number, detail?: string): string {
     if (status === 504) return 'Your local model is taking longer than expected. It may still be loading—wait a moment and try again.';

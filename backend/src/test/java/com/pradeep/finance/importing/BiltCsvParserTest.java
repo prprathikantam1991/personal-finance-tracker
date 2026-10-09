@@ -21,5 +21,7 @@ class BiltCsvParserTest {
                 .containsExactly("UBER   *ONE MEMBERSHIP", "BPS*BILT HOUSING", "Payment - Bilt Housing");
         assertThat(parser.parse(export)).extracting(ParsedTransaction::amount)
                 .extracting(Object::toString).containsExactly("9.99", "1638.52", "-1638.52");
+        assertThat(parser.parse(export)).extracting(ParsedTransaction::sourceAccountLastFour)
+                .containsExactly("9484", "2658", "2658");
     }
 }

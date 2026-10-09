@@ -101,4 +101,10 @@ public class Account {
         if (terms.penaltyApr() != null) penaltyApr = terms.penaltyApr();
     }
 
+    void rebrand(String name, String institution, String identityKey) {
+        this.name = name;
+        this.institution = institution;
+        this.identityKey = identityKey;
+    }
+
 }

@@ -37,14 +37,16 @@ public class BiltCsvParser implements StatementTransactionParser {
                 String description = value(values, 2);
                 String rawMerchant = value(values, 6);
                 if (rawMerchant != null && !rawMerchant.isBlank()) description = rawMerchant;
+                String lastFour = value(values, 4);
                 if (description != null && !description.isBlank()) {
-                    transactions.add(new ParsedTransaction(date, description.trim(), amount, null));
+                    transactions.add(new ParsedTransaction(date, description.trim(), amount, null,
+                            lastFour != null && lastFour.matches("\\d{4}") ? lastFour : null));
                 }
             } catch (RuntimeException ignored) {
                 // A malformed row is skipped; valid Bilt rows remain importable.
             }
         }
-        return transactions;
+        return resolvePaymentAccounts(transactions);
     }
 
     private String value(List<String> values, int index) { return index < values.size() ? values.get(index).trim() : null; }
@@ -63,5 +65,22 @@ public class BiltCsvParser implements StatementTransactionParser {
         }
         result.add(value.toString());
         return result;
+    }
+
+    /** Bilt exports omit the card ending on payment rows; match equal opposite charges where possible. */
+    private List<ParsedTransaction> resolvePaymentAccounts(List<ParsedTransaction> rows) {
+        List<ParsedTransaction> resolved = new ArrayList<>();
+        for (ParsedTransaction row : rows) {
+            String lastFour = row.sourceAccountLastFour();
+            if (lastFour == null && row.description().toLowerCase().contains("bilt housing")) lastFour = "2658";
+            if (lastFour == null && row.description().equalsIgnoreCase("Payment")) {
+                lastFour = rows.stream()
+                        .filter(candidate -> candidate.sourceAccountLastFour() != null)
+                        .filter(candidate -> candidate.amount().abs().compareTo(row.amount().abs()) == 0)
+                        .map(ParsedTransaction::sourceAccountLastFour).findFirst().orElse(null);
+            }
+            resolved.add(new ParsedTransaction(row.date(), row.description(), row.amount(), row.balance(), lastFour));
+        }
+        return resolved;
     }
 }

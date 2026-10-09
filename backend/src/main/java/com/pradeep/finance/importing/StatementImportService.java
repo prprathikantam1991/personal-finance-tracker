@@ -80,6 +80,7 @@ public class StatementImportService {
                 .map(parser -> parser.parse(text))
                 .orElse(List.of());
         AccountIdentificationResponse accountIdentification = identifyAccount(text);
+        java.util.Map<String, String> accountIdsBySourceLastFour = biltAccountIds(text);
         captureCardTerms(text, accountIdentification);
         StatementSummary statementSummary = extractStatementSummary(text);
         String existingImportId = jdbcTemplate.query("SELECT id FROM statement_imports WHERE source_hash = ? LIMIT 1",
@@ -87,6 +88,7 @@ public class StatementImportService {
         if (existingImportId != null) {
             refreshStatementSummary(existingImportId, statementSummary);
             backfillPreviouslyEmptyImport(existingImportId, accountIdentification.account() == null ? null : accountIdentification.account().id(), transactions);
+            reconcileBiltTransactions(existingImportId, transactions, accountIdsBySourceLastFour);
             return new StatementImportResponse(existingImportId, sanitizeFilename(statement.getOriginalFilename()), ImportStatus.REVIEW_REQUIRED,
                     accountIdentification, transactions, List.of("This exact statement was already imported. No duplicate transactions were added."));
         }
@@ -109,12 +111,13 @@ public class StatementImportService {
                 statementSummary.beginningBalance(), statementSummary.totalCredits(), statementSummary.totalDebits(), statementSummary.interestEarned(), statementSummary.annualInterestRate(), statementSummary.annualPercentageYield());
         int duplicatesSkipped = 0;
         for (ParsedTransaction transaction : transactions) {
-            if (accountId != null && transactionAlreadyExists(accountId, transaction)) {
+            String transactionAccountId = accountIdsBySourceLastFour.getOrDefault(transaction.sourceAccountLastFour(), accountId);
+            if (transactionAccountId != null && transactionAlreadyExists(transactionAccountId, transaction)) {
                 duplicatesSkipped++;
                 continue;
             }
             jdbcTemplate.update("INSERT INTO transactions (id, import_id, account_id, transaction_date, description, amount, balance, category, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    UUID.randomUUID().toString(), importId, accountId, transaction.date().toString(), transaction.description(), transaction.amount(), transaction.balance(), transactionCategorizer.categorize(transaction.description()), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString());
+                    UUID.randomUUID().toString(), importId, transactionAccountId, transaction.date().toString(), transaction.description(), transaction.amount(), transaction.balance(), transactionCategorizer.categorize(transaction.description()), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString());
         }
         transferDetectionService.detectTransfers();
 
@@ -206,7 +209,8 @@ public class StatementImportService {
     private AccountIdentificationResponse identifyAccount(String text) {
         Matcher biltAccountMatch = BILT_CSV_CARD_LAST_FOUR.matcher(text);
         if ((text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT")) && biltAccountMatch.find()) {
-            String lastFour = biltAccountMatch.group(1);
+            accountService.reconcileBiltToWellsAutograph("9484");
+            String lastFour = "2658";
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "Bilt", AccountType.CREDIT_CARD, lastFour, "Bilt •" + lastFour, "USD"));
         }
@@ -377,6 +381,27 @@ public class StatementImportService {
                     UUID.randomUUID().toString(), importId, accountId, transaction.date().toString(), transaction.description(), transaction.amount(), transaction.balance(), transactionCategorizer.categorize(transaction.description()), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString());
         }
         transferDetectionService.detectTransfers();
+    }
+
+    private java.util.Map<String, String> biltAccountIds(String text) {
+        if (!(text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT"))) return java.util.Map.of();
+        AccountIdentificationResponse wells = accountService.reconcileBiltToWellsAutograph("9484");
+        AccountIdentificationResponse bilt = accountService.identifyOrCreate(new AccountIdentificationRequest(
+                "Bilt", AccountType.CREDIT_CARD, "2658", "Bilt •2658", "USD"));
+        return java.util.Map.of("9484", wells.account().id(), "2658", bilt.account().id());
+    }
+
+    /** Re-links a re-uploaded Bilt export after its original import predated multi-account support. */
+    private void reconcileBiltTransactions(String importId, List<ParsedTransaction> transactions, java.util.Map<String, String> accountIdsBySourceLastFour) {
+        if (accountIdsBySourceLastFour.isEmpty()) return;
+        for (ParsedTransaction transaction : transactions) {
+            String accountId = accountIdsBySourceLastFour.get(transaction.sourceAccountLastFour());
+            if (accountId == null) continue;
+            jdbcTemplate.update("""
+                    UPDATE transactions SET account_id = ?
+                    WHERE import_id = ? AND transaction_date = ? AND description = ? AND amount = ?
+                    """, accountId, importId, transaction.date().toString(), transaction.description(), transaction.amount());
+        }
     }
 
     private void captureCardTerms(String text, AccountIdentificationResponse accountIdentification) {

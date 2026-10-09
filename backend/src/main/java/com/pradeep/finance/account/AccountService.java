@@ -53,6 +53,22 @@ public class AccountService {
         });
     }
 
+    /** Preserves one credit-line history when the legacy Bilt card became a Wells Fargo Autograph card. */
+    @Transactional
+    public AccountIdentificationResponse reconcileBiltToWellsAutograph(String lastFour) {
+        String wellsIdentity = buildIdentityKey("wells fargo", normalizeLastFour(lastFour));
+        var existingWells = accountRepository.findByIdentityKey(wellsIdentity);
+        if (existingWells.isPresent()) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
+                AccountResponse.from(existingWells.get()), "Matched the converted Wells Fargo Autograph account.");
+        String biltIdentity = buildIdentityKey("bilt", normalizeLastFour(lastFour));
+        return accountRepository.findByIdentityKey(biltIdentity).map(account -> {
+            account.rebrand("Wells Fargo Autograph •" + lastFour, "wells fargo", wellsIdentity);
+            return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
+                    AccountResponse.from(account), "Preserved legacy Bilt history on the converted Wells Fargo Autograph account.");
+        }).orElseGet(() -> createAccount(new AccountIdentificationRequest("Wells Fargo", AccountType.CREDIT_CARD,
+                lastFour, "Wells Fargo Autograph •" + lastFour, "USD"), "wells fargo", lastFour, wellsIdentity));
+    }
+
     private AccountIdentificationResponse createAccount(
             AccountIdentificationRequest request,
             String institution,

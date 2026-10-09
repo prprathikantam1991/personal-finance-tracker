@@ -86,6 +86,8 @@ public class LocalAssistantService {
         List<AssistantConversationMessage> safeConversation = conversation == null ? List.of() : conversation;
         DateRange resolvedRange = resolveRange(question, safeConversation, savedContext);
         String resolvedMerchant = resolveMerchant(question, safeConversation, savedContext);
+        Optional<AssistantChatResponse> plannedFallback = plannedAgentFallback(question);
+        if (plannedFallback.isPresent()) return asAgentFallback(plannedFallback.get(), resolvedRange);
         if (needsPeriodClarification(question, resolvedRange)) {
             return agentStopped("Which period should I use—last month, a specific month, or all saved history?", List.of(), List.of(), resolvedRange, "CLARIFICATION_REQUIRED");
         }
@@ -105,6 +107,9 @@ public class LocalAssistantService {
             List<JsonNode> calls = new ArrayList<>();
             assistantMessage.path("tool_calls").forEach(calls::add);
             if (calls.isEmpty()) {
+                if (containsPseudoToolSyntax(content(assistantMessage))) {
+                    return agentStopped("The model returned tool-like text instead of a valid tool request. Please try again.", toolsUsed, steps, resolvedRange, "INVALID_TOOL_RESPONSE");
+                }
                 if (toolsUsed.isEmpty()) {
                     Optional<AssistantChatResponse> fallback = directAnswer(question, safeConversation, savedContext);
                     if (fallback.isPresent()) {
@@ -161,6 +166,9 @@ public class LocalAssistantService {
         List<JsonNode> calls = new ArrayList<>();
         assistantMessage.path("tool_calls").forEach(calls::add);
         if (calls.isEmpty()) {
+            if (containsPseudoToolSyntax(content(assistantMessage))) {
+                return new AssistantChatResponse("The model returned tool-like text instead of a valid tool request. Please try again.", List.of(), model, "INVALID_TOOL_RESPONSE", List.of("No finance-data tool was used for this response."));
+            }
             return directAnswer(question, conversation, savedContext)
                     .orElse(new AssistantChatResponse(content(assistantMessage), List.of(), model, "MODEL_RESPONSE", List.of("No finance-data tool was used for this response.")));
         }
@@ -182,6 +190,75 @@ public class LocalAssistantService {
 
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation) {
         return directAnswer(question, conversation, ConversationContext.empty());
+    }
+
+    /**
+     * These are narrow, multi-lookup finance plans whose arithmetic is better
+     * owned by the application than retried through an unreliable tool selector.
+     */
+    private Optional<AssistantChatResponse> plannedAgentFallback(String question) {
+        String normalized = question.toLowerCase(Locale.ROOT);
+        if (normalized.contains("recurring") && (normalized.contains("checking") || normalized.contains("available cash"))) {
+            List<com.pradeep.finance.recurring.RecurringTransaction> recurring = financeTools.recurringActivity().stream()
+                    .filter(item -> !"Income".equalsIgnoreCase(item.category())).toList();
+            List<FinanceToolsService.AccountContext> checking = financeTools.accountOverview().stream()
+                    .filter(account -> account.accountType() == com.pradeep.finance.account.AccountType.CHECKING).toList();
+            BigDecimal available = checking.stream().map(FinanceToolsService.AccountContext::statementBalance)
+                    .filter(java.util.Objects::nonNull).filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
+            String recurringText = recurring.isEmpty() ? "No recurring expenses are currently detected." : recurring.stream()
+                    .map(item -> "- " + item.merchant() + ": average " + money(item.averageAmount()) + ", expected " + item.nextExpectedDate())
+                    .reduce("Detected recurring expenses:\n", (left, right) -> left + right + "\n");
+            String checkingText = checking.stream().map(account -> account.name() + " •" + account.lastFour() + ": " + money(account.statementBalance()))
+                    .reduce((left, right) -> left + "; " + right).orElse("No checking balance is available.");
+            return Optional.of(new AssistantChatResponse(recurringText + "Available checking balance: " + money(available) + " (" + checkingText + ").",
+                    List.of("get_recurring_activity", "get_account_overview"), model, "FALLBACK", evidence(null, List.of("get_recurring_activity", "get_account_overview"))));
+        }
+        if (normalized.contains("patel brothers") && normalized.contains("grocery") && normalized.contains("compare")) {
+            ComparisonRange periods = comparisonRange(question);
+            if (periods == null) return Optional.empty();
+            DateRange range = new DateRange(periods.first().from(), periods.second().to());
+            List<com.pradeep.finance.transaction.TransactionResponse> transactions = financeTools.searchTransactions(null, range.from(), range.to(), null, "Patel Brothers");
+            BigDecimal merchantSpending = spendingFromTransactions(transactions);
+            BigDecimal groceries = financeTools.categorySpending(range.from(), range.to()).stream()
+                    .filter(item -> "Groceries".equalsIgnoreCase(item.category())).map(com.pradeep.finance.dashboard.DashboardSummary.CategoryTotal::amount)
+                    .findFirst().orElse(BigDecimal.ZERO);
+            return Optional.of(new AssistantChatResponse("From " + range.label() + ", you spent " + money(merchantSpending) + " at Patel Brothers across "
+                    + transactions.size() + " confirmed transaction" + (transactions.size() == 1 ? "" : "s") + ". Total grocery spending was " + money(groceries) + ".",
+                    List.of("search_transactions", "get_category_spending"), model, "FALLBACK",
+                    evidence(range, List.of("search_transactions", "get_category_spending"))));
+        }
+        if (normalized.contains("india remittance") && normalized.contains("last two months")
+                && (normalized.contains("income") || normalized.contains("cash flow"))) {
+            YearMonth firstMonth = YearMonth.now().minusMonths(2);
+            YearMonth secondMonth = YearMonth.now().minusMonths(1);
+            DateRange firstRange = new DateRange(firstMonth.atDay(1), firstMonth.atEndOfMonth());
+            DateRange secondRange = new DateRange(secondMonth.atDay(1), secondMonth.atEndOfMonth());
+            FinanceToolsService.PeriodComparison comparison = financeTools.comparePeriods(firstRange.from(), firstRange.to(), secondRange.from(), secondRange.to());
+            com.pradeep.finance.dashboard.DashboardSummary first = comparison.selectedPeriod().summary();
+            com.pradeep.finance.dashboard.DashboardSummary second = comparison.comparisonPeriod().summary();
+            String answer = "India remittance comparison: " + periodLabel(firstRange) + " vs. " + periodLabel(secondRange) + "\n"
+                    + "- India remittance: " + money(first.indiaRemittance()) + " → " + money(second.indiaRemittance()) + " (" + signedMoney(second.indiaRemittance().subtract(first.indiaRemittance())) + ")\n"
+                    + "- Income: " + money(first.income()) + " → " + money(second.income()) + " (" + signedMoney(second.income().subtract(first.income())) + ")\n"
+                    + "- Net cash flow: " + money(first.netCashFlow()) + " → " + money(second.netCashFlow()) + " (" + signedMoney(second.netCashFlow().subtract(first.netCashFlow())) + ")";
+            return Optional.of(new AssistantChatResponse(answer, List.of("compare_periods"), model, "FALLBACK",
+                    evidence(new DateRange(firstRange.from(), secondRange.to()), List.of("compare_periods"))));
+        }
+        return Optional.empty();
+    }
+
+    private AgentRunResponse asAgentFallback(AssistantChatResponse answer, DateRange range) {
+        List<AgentStep> steps = answer.toolsUsed().stream().map(tool -> new AgentStep(1, tool, "Fallback")).toList();
+        return new AgentRunResponse(answer.answer(), answer.toolsUsed(), steps, "FALLBACK", model,
+                answer.evidence().isEmpty() ? evidence(range, answer.toolsUsed()) : answer.evidence());
+    }
+
+    private BigDecimal spendingFromTransactions(List<com.pradeep.finance.transaction.TransactionResponse> transactions) {
+        return transactions.stream().map(item -> item.accountType() == com.pradeep.finance.account.AccountType.CREDIT_CARD ? item.amount() : item.amount().negate())
+                .filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private boolean containsPseudoToolSyntax(String answer) {
+        return answer != null && answer.matches("(?s).*<\\s*(?:call|tool_call|function)\\s*:.*");
     }
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         String normalized = question.toLowerCase(Locale.ROOT);

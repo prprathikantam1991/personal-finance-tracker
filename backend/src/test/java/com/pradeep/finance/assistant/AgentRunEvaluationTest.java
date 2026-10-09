@@ -229,6 +229,53 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void usesBothRecurringAndAccountToolsForRecurringExpenseCashCoverage() {
+        when(financeTools.recurringActivity()).thenReturn(List.of(new com.pradeep.finance.recurring.RecurringTransaction(
+                "Nissan Auto Loan", "Auto & Transport", BigDecimal.valueOf(564.17), "MONTHLY", 3,
+                java.time.LocalDate.of(2026, 8, 20), java.time.LocalDate.of(2026, 9, 20))));
+        when(financeTools.accountOverview()).thenReturn(List.of(
+                account("BoA Checking", "6643", com.pradeep.finance.account.AccountType.CHECKING, BigDecimal.valueOf(2336.16), null)));
+
+        AgentRunResponse result = service.agentRun("Show my recurring expenses due soon and compare them with my available checking balance.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("Nissan Auto Loan").contains("$2,336.16");
+        assertThat(result.toolsUsed()).containsExactly("get_recurring_activity", "get_account_overview");
+        verify(localModelClient, never()).complete(any(), any(), anyInt());
+    }
+
+    @Test
+    void usesFocusedMerchantAndCategoryLookupsInsteadOfAWideTransactionResult() {
+        when(financeTools.searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 7, 1)), eq(java.time.LocalDate.of(2026, 8, 31)), eq(null), eq("Patel Brothers")))
+                .thenReturn(List.of(new com.pradeep.finance.transaction.TransactionResponse(
+                        "transaction-1", "account-1", "Sample Card", com.pradeep.finance.account.AccountType.CREDIT_CARD,
+                        java.time.LocalDate.of(2026, 8, 18), "PATEL BROTHERS", "Patel Brothers", BigDecimal.valueOf(68.05),
+                        null, "Groceries", "HIGH", null, "CONFIRMED")));
+        when(financeTools.categorySpending(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 8, 31)))
+                .thenReturn(List.of(new com.pradeep.finance.dashboard.DashboardSummary.CategoryTotal("Groceries", BigDecimal.valueOf(388.68))));
+
+        AgentRunResponse result = service.agentRun("Find my spending at Patel Brothers across July and August, then compare it with my total grocery spending.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("$68.05").contains("$388.68");
+        assertThat(result.toolsUsed()).containsExactly("search_transactions", "get_category_spending");
+        verify(localModelClient, never()).complete(any(), any(), anyInt());
+    }
+
+    @Test
+    void rejectsPseudoToolTextRatherThanDisplayingItAsACompletedAnswer() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(
+                response("{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call-1\",\"type\":\"function\",\"function\":{\"name\":\"get_monthly_summary\",\"arguments\":\"{\\\"from\\\":\\\"2026-08-01\\\",\\\"to\\\":\\\"2026-08-31\\\"}\"}}]}"),
+                response("{\"role\":\"assistant\",\"content\":\"<call:get_monthly_summary{from: 2026-09-01} />\"}"));
+        when(financeTools.monthlySummary(any(), any())).thenReturn(summary(1, 1, 1, 1));
+
+        AgentRunResponse result = service.agentRun("Show India remittance for August.", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("INVALID_TOOL_RESPONSE");
+        assertThat(result.answer()).doesNotContain("<call:");
+    }
+
+    @Test
     void calculatesMerchantFollowUpsFromDateFilteredTransactionsRatherThanTopMerchantAggregates() {
         when(financeTools.searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 8, 1)), eq(java.time.LocalDate.of(2026, 8, 31)), eq(null), eq("Patel Brothers")))
                 .thenReturn(List.of(new com.pradeep.finance.transaction.TransactionResponse(

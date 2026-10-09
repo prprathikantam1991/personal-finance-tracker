@@ -24,6 +24,12 @@ The model may request named read-only finance tools. Spring Boot validates argum
 
 The preferred Assistant workflow is model-selected tool calling. A deterministic path may handle unambiguous common requests when a small local model cannot reliably resolve dates or tool arguments. It is a reliability fallback, not a replacement for the assistant architecture.
 
+## V6 cloud model: Gemma 4 31B through Bedrock Mantle
+
+Gemma 4 31B is the selected cloud model for V6 evaluation. It is reached through Bedrock Mantle's OpenAI-compatible Chat Completions API and Spring AI's OpenAI `ChatClient` integration. This preserves the application's provider-neutral tool boundary while using a model already validated against the finance tool set. The model receives only the user question, bounded conversation context, allow-listed tool definitions, and bounded tool results; SQLite, statement files, and write operations remain inaccessible.
+
+The native Spring AI Bedrock Converse path remains available for models that support Converse, but is not used for Gemma 4 because AWS does not expose Gemma 4 31B or E2B through that API. The custom runtime remains a rollback option until the full V6 verification checklist is complete.
+
 ## No cloud infrastructure yet
 
 Docker, Terraform, CloudFormation, authentication, CI/CD, and hosted deployment are intentionally deferred. Adding empty configuration before a deployment target exists would create maintenance burden without user value.

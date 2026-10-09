@@ -1,6 +1,6 @@
 # V6 — Spring AI Integration and Cloud Provider Boundary
 
-**Status:** in progress  
+**Status:** in progress — Gemma 4 31B provider selected and live-verified
 **Tracking:** GitHub Issue #19
 
 ## Goal
@@ -66,6 +66,22 @@ The runtime selector is a temporary migration seam. It allows parity testing and
 5. **Promotion or rollback**
    - Promote Spring AI only when V4 evaluation prompts, safety checks, and trace/evidence output are at parity.
    - Keep the custom runtime available behind configuration until the migration is proven stable.
+
+## Provider decision and live verification
+
+**Selected cloud runtime:** `spring-ai-bedrock-mantle` with `google.gemma-4-31b`.
+
+The selected runtime follows this path:
+
+```text
+Angular Assistant → Spring Boot → Spring AI ChatClient → Bedrock Mantle Chat Completions → Gemma 4 31B
+                                              ↓
+                                allow-listed read-only finance tools → SQLite
+```
+
+This choice was made after live endpoint verification on October 9, 2026. A single-tool credit-utilization question selected `get_credit_utilization`, returned a grounded result, and produced `SPRING_AI_TOOL_CALL` evidence. A multi-tool July/August comparison selected `compare_periods` and `get_merchant_spending`, then returned grounded comparison and merchant results with matching evidence.
+
+Gemma 4 31B is accessed through Mantle's OpenAI-compatible Chat Completions route, not Bedrock Converse. This is intentional: AWS currently lists Chat Completions and Responses for Gemma 4 31B/E2B, while Converse is unavailable for those models. The native Converse path remains a supported alternative for compatible models such as Claude.
 
 ## Safety contract
 

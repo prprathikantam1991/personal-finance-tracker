@@ -145,7 +145,7 @@ $env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-mantle-api-key"
 ./scripts/start-backend.ps1 -Provider bedrock-mantle -Runtime spring-ai-bedrock-mantle
 ```
 
-It defaults to `google.gemma-4-31b`. This path uses the same Bedrock Mantle OpenAI-compatible endpoint and session-only API token as the existing Gemma runtime; it does not use Bedrock Converse or require `bedrock:InvokeModel` IAM permission.
+It defaults to `google.gemma-4-31b`. This is the selected V6 cloud evaluation runtime and has been live-verified with both single-tool and multi-tool finance questions. It uses the same Bedrock Mantle OpenAI-compatible endpoint and session-only API token as the existing Gemma runtime; it does not use Bedrock Converse or require `bedrock:InvokeModel` IAM permission.
 
 ## Verify changes
 

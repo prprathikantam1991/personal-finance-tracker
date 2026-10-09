@@ -39,7 +39,7 @@ public class StatementImportService {
     private static final Pattern WELLS_ACCOUNT_ENDING = Pattern.compile("(?i)account ending in\\s+(\\d{4})");
     private static final Pattern WELLS_CHECKING_ACCOUNT = Pattern.compile("(?i)account number:\\s*\\d*(\\d{4})");
     private static final Pattern BILT_CSV_CARD_LAST_FOUR = Pattern.compile("(?m)^\\d{4}-\\d{2}-\\d{2},(?:[^,\\r\\n]*,){3}\\s*(\\d{4})\\s*,");
-    private static final Pattern AMEX_CSV_ACCOUNT_LAST_FOUR = Pattern.compile("(?m),\\s*-(\\d{4})\\s*,");
+    private static final Pattern AMEX_CSV_ACCOUNT_LAST_FOUR = Pattern.compile("(?m),\\s*-\\d*(\\d{4})\\s*,");
 
     private final StatementTextExtractor textExtractor;
     private final List<StatementTransactionParser> transactionParsers;
@@ -225,7 +225,7 @@ public class StatementImportService {
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "Bilt", AccountType.CREDIT_CARD, lastFour, "Bilt •" + lastFour, "USD"));
         }
-        if (text.contains("Wells Fargo Bilt Mastercard") && text.contains("Wells Fargo Autograph")) {
+        if (text.contains("Bilt Mastercard") && text.contains("Autograph")) {
             return accountService.reconcileBiltToWellsAutograph("9484");
         }
         Matcher bankOfAmericaCardMatch = BOFA_CARD_NUMBER.matcher(text);
@@ -270,7 +270,7 @@ public class StatementImportService {
             return accountService.identifySoleAccount("American Express", AccountType.CHECKING);
         }
         Matcher amexCsvAccountMatch = AMEX_CSV_ACCOUNT_LAST_FOUR.matcher(text);
-        if (text.startsWith("Date,Description,Card Member,Account #") && amexCsvAccountMatch.find()) {
+        if (text.contains("Date,Description,Card Member,Account #") && amexCsvAccountMatch.find()) {
             String lastFour = amexCsvAccountMatch.group(1);
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "American Express", AccountType.CREDIT_CARD, lastFour, "American Express •" + lastFour, "USD"));

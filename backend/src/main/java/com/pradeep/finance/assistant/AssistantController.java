@@ -55,7 +55,8 @@ public class AssistantController {
     }
 
     private AssistantRuntime selectedRuntime() {
-        if (!"spring-ai-lm-studio".equalsIgnoreCase(runtime) && !"spring-ai-bedrock".equalsIgnoreCase(runtime)) return localAssistantService;
+        if (!"spring-ai-lm-studio".equalsIgnoreCase(runtime) && !"spring-ai-bedrock".equalsIgnoreCase(runtime)
+                && !"spring-ai-bedrock-mantle".equalsIgnoreCase(runtime)) return localAssistantService;
         SpringAiAssistantService selected = springAiAssistantService.getIfAvailable();
         if (selected == null) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,

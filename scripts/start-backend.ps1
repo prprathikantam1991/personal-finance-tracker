@@ -1,7 +1,7 @@
 param(
     [ValidateSet('lm-studio', 'bedrock-mantle', 'bedrock')]
     [string]$Provider = 'bedrock-mantle',
-    [ValidateSet('custom', 'spring-ai-lm-studio', 'spring-ai-bedrock')]
+    [ValidateSet('custom', 'spring-ai-lm-studio', 'spring-ai-bedrock', 'spring-ai-bedrock-mantle')]
     [string]$Runtime = 'custom',
     [string]$Model = '',
     [ValidateSet('', 'low', 'medium', 'high')]
@@ -29,11 +29,14 @@ if ($Runtime -eq 'spring-ai-lm-studio' -and $Provider -ne 'lm-studio') {
 if ($Runtime -eq 'spring-ai-bedrock' -and $Provider -ne 'bedrock') {
     throw 'The Spring AI Bedrock runtime uses the AWS Converse API. Use -Provider bedrock.'
 }
+if ($Runtime -eq 'spring-ai-bedrock-mantle' -and $Provider -ne 'bedrock-mantle') {
+    throw 'The Spring AI Bedrock Mantle runtime uses the OpenAI-compatible Mantle endpoint. Use -Provider bedrock-mantle.'
+}
 if ([string]::IsNullOrWhiteSpace($Model)) {
-    $Model = if ($Runtime -eq 'spring-ai-bedrock') {
-        'global.anthropic.claude-haiku-4-5-20251001-v1:0'
-    } else {
-        'google.gemma-4-e2b'
+    $Model = switch ($Runtime) {
+        'spring-ai-bedrock' { 'global.anthropic.claude-haiku-4-5-20251001-v1:0' }
+        'spring-ai-bedrock-mantle' { 'google.gemma-4-31b' }
+        default { 'google.gemma-4-e2b' }
     }
 }
 
@@ -42,12 +45,19 @@ $env:FINANCE_ASSISTANT_RUNTIME = $Runtime
 $env:FINANCE_ASSISTANT_MODEL = $Model
 $env:FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS = $FinalAnswerMaxTokens
 $env:FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS = $ToolSelectionMaxTokens
-$env:FINANCE_SPRING_AI_ENABLED = if ($Runtime -eq 'spring-ai-lm-studio') { 'true' } else { 'false' }
+$env:FINANCE_SPRING_AI_ENABLED = if ($Runtime -eq 'spring-ai-lm-studio' -or $Runtime -eq 'spring-ai-bedrock-mantle') { 'true' } else { 'false' }
 if ($Runtime -eq 'spring-ai-lm-studio') {
-    $env:FINANCE_SPRING_AI_LM_STUDIO_BASE_URL = 'http://localhost:1234'
+    $env:FINANCE_SPRING_AI_OPENAI_BASE_URL = 'http://localhost:1234'
+    $env:FINANCE_SPRING_AI_OPENAI_API_KEY = if ([string]::IsNullOrWhiteSpace($env:LM_STUDIO_API_KEY)) { 'lm-studio' } else { $env:LM_STUDIO_API_KEY }
     $env:FINANCE_SPRING_AI_CHAT_MODEL = 'openai'
 } elseif ($Runtime -eq 'spring-ai-bedrock') {
     $env:FINANCE_SPRING_AI_CHAT_MODEL = 'bedrock-converse'
+} elseif ($Runtime -eq 'spring-ai-bedrock-mantle') {
+    # Spring AI appends /v1/chat/completions. Mantle's OpenAI-compatible base
+    # therefore ends at /openai (the existing custom client owns its own /v1).
+    $env:FINANCE_SPRING_AI_OPENAI_BASE_URL = if ([string]::IsNullOrWhiteSpace($env:BEDROCK_MANTLE_BASE_URL)) { 'https://bedrock-mantle.us-east-1.api.aws/openai' } else { $env:BEDROCK_MANTLE_BASE_URL.TrimEnd('/') -replace '/v1$', '' }
+    $env:FINANCE_SPRING_AI_OPENAI_API_KEY = if ([string]::IsNullOrWhiteSpace($env:BEDROCK_API_KEY)) { $env:AWS_BEARER_TOKEN_BEDROCK } else { $env:BEDROCK_API_KEY }
+    $env:FINANCE_SPRING_AI_CHAT_MODEL = 'openai'
 } else {
     $env:FINANCE_SPRING_AI_CHAT_MODEL = 'none'
 }

@@ -29,16 +29,19 @@ spring:
     # V6 migration foundation. The current custom assistant remains the default path.
     # Spring AI is opt-in until tool and provider parity are verified.
     openai:
-      # Spring AI's OpenAI client adds /v1 itself; use the LM Studio server root here.
-      base-url: ${FINANCE_SPRING_AI_LM_STUDIO_BASE_URL:http://localhost:1234}
-      # Spring AI requires a non-empty value even when LM Studio's local server
-      # has authentication disabled. This placeholder is not a secret.
-      api-key: ${LM_STUDIO_API_KEY:lm-studio}
+      # LM Studio uses its server root; Bedrock Mantle supplies its OpenAI-compatible
+      # /openai base URL. Spring AI appends /v1/chat/completions for chat requests.
+      base-url: ${FINANCE_SPRING_AI_OPENAI_BASE_URL:http://localhost:1234}
+      # Spring AI requires a non-empty value even for a locally unauthenticated server.
+      # The local placeholder is not a secret; Mantle receives the session-only API token.
+      api-key: ${FINANCE_SPRING_AI_OPENAI_API_KEY:lm-studio}
       chat:
         enabled: ${FINANCE_SPRING_AI_ENABLED:false}
         options:
           model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
           temperature: 0.1
+          max-tokens: ${FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS:1200}
+          reasoning-effort: ${BEDROCK_REASONING_EFFORT:}
       embedding:
         enabled: false
     bedrock:

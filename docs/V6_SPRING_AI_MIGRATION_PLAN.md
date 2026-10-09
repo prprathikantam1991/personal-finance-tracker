@@ -53,6 +53,7 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - Route a selected test mode through `ChatClient` and compare the response, tool trace, and evidence against the existing evaluation suite.
    - `FINANCE_ASSISTANT_RUNTIME=spring-ai-lm-studio` activates this path only when `FINANCE_SPRING_AI_ENABLED=true`. The repository launcher sets both values when invoked with `-Provider lm-studio -Runtime spring-ai-lm-studio`.
    - The custom V4 runtime remains the default. A request-local trace records the named tool callbacks Spring AI executed, so the existing Angular evidence and agent-activity panels continue to receive verified tool names.
+   - A second OpenAI-compatible runtime, `spring-ai-bedrock-mantle`, uses Spring AI against Bedrock Mantle. It retains the existing `google.gemma-4-31b` model, Mantle endpoint, and session-only API-token approach; only the handwritten provider protocol code is replaced.
 
 4. **Bedrock provider path — implementation ready**
    - Add an explicit Spring AI Bedrock Converse profile using the local AWS credential chain.
@@ -60,6 +61,7 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - Run real-provider verification before allowing it as the default cloud path.
    - `FINANCE_ASSISTANT_RUNTIME=spring-ai-bedrock` with `FINANCE_SPRING_AI_CHAT_MODEL=bedrock-converse` selects Spring AI's native Bedrock Converse client. The launcher sets both values through `-Provider bedrock -Runtime spring-ai-bedrock`.
    - The first live check reached Bedrock successfully but the configured local identity was denied `bedrock:InvokeModel` for the selected inference profile. This is an IAM policy prerequisite, not an application or credential-chain failure.
+   - This native Converse route is deliberately separate from the Mantle/Gemma route because they use different provider protocols and authentication mechanisms. In AWS's current compatibility matrix, Gemma 4 31B and Gemma 4 E2B support Chat Completions and Responses but not Converse; the Mantle route is therefore the correct Spring AI integration path for those models.
 
 5. **Promotion or rollback**
    - Promote Spring AI only when V4 evaluation prompts, safety checks, and trace/evidence output are at parity.

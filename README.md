@@ -136,6 +136,17 @@ $env:AWS_PROFILE = "finance-tracker-bedrock"
 
 The launcher selects Claude Haiku 4.5's global inference profile by default for this runtime. Your selected local AWS identity needs `bedrock:InvokeModel` permission for that model or inference profile; no Bedrock API key is used or stored. This is an opt-in evaluation path and sends only the question, bounded conversation context, tool definitions, and the individual tool results needed for an answer—not the SQLite database or raw statements.
 
+### Spring AI Gemma through Bedrock Mantle (V6, opt-in)
+
+To retain the previously evaluated Gemma model while replacing the handwritten `RestClient` protocol code with Spring AI, use the Mantle-specific runtime:
+
+```powershell
+$env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-mantle-api-key"
+./scripts/start-backend.ps1 -Provider bedrock-mantle -Runtime spring-ai-bedrock-mantle
+```
+
+It defaults to `google.gemma-4-31b`. This path uses the same Bedrock Mantle OpenAI-compatible endpoint and session-only API token as the existing Gemma runtime; it does not use Bedrock Converse or require `bedrock:InvokeModel` IAM permission.
+
 ## Verify changes
 
 ```powershell

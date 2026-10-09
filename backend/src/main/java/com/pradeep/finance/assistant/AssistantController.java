@@ -55,11 +55,11 @@ public class AssistantController {
     }
 
     private AssistantRuntime selectedRuntime() {
-        if (!"spring-ai-lm-studio".equalsIgnoreCase(runtime)) return localAssistantService;
+        if (!"spring-ai-lm-studio".equalsIgnoreCase(runtime) && !"spring-ai-bedrock".equalsIgnoreCase(runtime)) return localAssistantService;
         SpringAiAssistantService selected = springAiAssistantService.getIfAvailable();
         if (selected == null) {
             throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-                    "Spring AI local runtime is not configured. Start the backend with FINANCE_SPRING_AI_ENABLED=true and a running LM Studio server.");
+                    "The selected Spring AI runtime is not configured. Start the backend using the repository launcher and the matching runtime option.");
         }
         return selected;
     }

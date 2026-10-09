@@ -54,10 +54,12 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - `FINANCE_ASSISTANT_RUNTIME=spring-ai-lm-studio` activates this path only when `FINANCE_SPRING_AI_ENABLED=true`. The repository launcher sets both values when invoked with `-Provider lm-studio -Runtime spring-ai-lm-studio`.
    - The custom V4 runtime remains the default. A request-local trace records the named tool callbacks Spring AI executed, so the existing Angular evidence and agent-activity panels continue to receive verified tool names.
 
-4. **Bedrock provider path**
+4. **Bedrock provider path — implementation ready**
    - Add an explicit Spring AI Bedrock Converse profile using the local AWS credential chain.
    - Preserve the current minimum-data contract and timeout/budget configuration.
    - Run real-provider verification before allowing it as the default cloud path.
+   - `FINANCE_ASSISTANT_RUNTIME=spring-ai-bedrock` with `FINANCE_SPRING_AI_CHAT_MODEL=bedrock-converse` selects Spring AI's native Bedrock Converse client. The launcher sets both values through `-Provider bedrock -Runtime spring-ai-bedrock`.
+   - The first live check reached Bedrock successfully but the configured local identity was denied `bedrock:InvokeModel` for the selected inference profile. This is an IAM policy prerequisite, not an application or credential-chain failure.
 
 5. **Promotion or rollback**
    - Promote Spring AI only when V4 evaluation prompts, safety checks, and trace/evidence output are at parity.
@@ -119,6 +121,14 @@ It publishes these eleven operations: monthly summary, category spending, mercha
 
 The Spring AI client points at LM Studio's server root (`http://localhost:1234`), rather than the handwritten client's `/v1` base URL, because Spring AI supplies the OpenAI API path itself.
 Spring AI also requires a non-empty API-key setting even when LM Studio has local authentication disabled; the default `lm-studio` placeholder is not a credential and can be replaced by `LM_STUDIO_API_KEY` when local authentication is enabled.
+
+## V6 Bedrock Converse evaluation procedure
+
+1. Use an AWS profile that resolves through the normal local AWS credential chain.
+2. Grant that identity `bedrock:InvokeModel` for the selected Bedrock foundation model or inference profile. Add streaming permission only if streaming is introduced later.
+3. Start with `./scripts/start-backend.ps1 -Provider bedrock -Runtime spring-ai-bedrock`.
+4. Run the same V4 verification prompts and compare facts, tool trace, evidence, latency, and error behavior against the custom Bedrock adapter.
+5. Use `-Runtime custom` to roll back immediately. The provider choice never changes local ledger data, statements, imports, or stored conversations.
 
 ## Definition of done
 

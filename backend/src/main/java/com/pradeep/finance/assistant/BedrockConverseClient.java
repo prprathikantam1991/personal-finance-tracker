@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
@@ -47,13 +48,16 @@ import software.amazon.awssdk.services.bedrockruntime.model.ToolUseBlock;
  * <p>It deliberately normalizes Bedrock replies into the existing OpenAI-shaped model contract.
  * This keeps the finance-tool allow-list and agent safety checks provider-independent.</p>
  */
-@Component
+// Keep a distinct bean name from Spring AI's Bedrock Converse client. The two
+// coexist during V6 so the established runtime remains an immediate fallback.
+@Component("legacyBedrockConverseClient")
 @ConditionalOnProperty(name = "finance.assistant.provider", havingValue = "bedrock")
 public class BedrockConverseClient implements LocalModelClient {
     private final BedrockRuntimeClient client;
     private final String model;
     private final ObjectMapper objectMapper;
 
+    @Autowired
     public BedrockConverseClient(@Value("${finance.assistant.bedrock.region}") String region,
                                  @Value("${finance.assistant.bedrock.profile:}") String profile,
                                  @Value("${finance.assistant.bedrock.timeout-ms:60000}") long timeoutMs,

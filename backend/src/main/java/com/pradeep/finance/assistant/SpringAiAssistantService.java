@@ -6,28 +6,27 @@ import java.util.List;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import software.amazon.awssdk.awscore.exception.AwsServiceException;
 
 /**
  * Experimental V6 runtime for an OpenAI-compatible local model. Spring AI owns
  * the model/tool protocol; application tools and data limits remain local.
  */
-@Service
-@ConditionalOnProperty(name = "finance.assistant.runtime", havingValue = "spring-ai-lm-studio")
-@ConditionalOnBean(ChatClient.Builder.class)
-public class SpringAiAssistantService implements AssistantRuntime {
+public abstract class SpringAiAssistantService implements AssistantRuntime {
+    private static final Logger log = LoggerFactory.getLogger(SpringAiAssistantService.class);
     private final ChatClient chatClient;
     private final SpringAiFinanceTools financeTools;
     private final ToolExecutionTrace toolTrace;
     private final String model;
 
-    public SpringAiAssistantService(ChatClient.Builder chatClientBuilder, SpringAiFinanceTools financeTools,
-                                   ToolExecutionTrace toolTrace,
-                                   @Value("${finance.assistant.model}") String model) {
+    protected SpringAiAssistantService(ChatClient.Builder chatClientBuilder, SpringAiFinanceTools financeTools,
+                                       ToolExecutionTrace toolTrace, String model) {
         this.chatClient = chatClientBuilder.build();
         this.financeTools = financeTools;
         this.toolTrace = toolTrace;
@@ -52,9 +51,21 @@ public class SpringAiAssistantService implements AssistantRuntime {
         } catch (ResponseStatusException exception) {
             throw exception;
         } catch (Exception exception) {
+            Throwable cause = rootCause(exception);
+            log.warn("Spring AI assistant request failed: {}: {}", cause.getClass().getSimpleName(), cause.getMessage());
+            if (cause instanceof AwsServiceException serviceException && serviceException.statusCode() == 403) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "Amazon Bedrock denied this model request. Grant the selected local AWS identity bedrock:InvokeModel access to the selected model or inference profile, then try again.", exception);
+            }
             throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
                     "The Spring AI local runtime could not complete the request. Confirm LM Studio is running with a tool-capable model, then try again.", exception);
         }
+    }
+
+    private Throwable rootCause(Throwable exception) {
+        Throwable current = exception;
+        while (current.getCause() != null) current = current.getCause();
+        return current;
     }
 
     @Override

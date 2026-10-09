@@ -1,9 +1,9 @@
 param(
     [ValidateSet('lm-studio', 'bedrock-mantle', 'bedrock')]
     [string]$Provider = 'bedrock-mantle',
-    [ValidateSet('custom', 'spring-ai-lm-studio')]
+    [ValidateSet('custom', 'spring-ai-lm-studio', 'spring-ai-bedrock')]
     [string]$Runtime = 'custom',
-    [string]$Model = 'google.gemma-4-e2b',
+    [string]$Model = '',
     [ValidateSet('', 'low', 'medium', 'high')]
     [string]$ReasoningEffort = 'high',
     [ValidateRange(160, 4000)]
@@ -26,6 +26,16 @@ if ($Provider -eq 'bedrock-mantle' -and [string]::IsNullOrWhiteSpace($env:AWS_BE
 if ($Runtime -eq 'spring-ai-lm-studio' -and $Provider -ne 'lm-studio') {
     throw 'The Spring AI V6 runtime currently supports LM Studio only. Use -Provider lm-studio.'
 }
+if ($Runtime -eq 'spring-ai-bedrock' -and $Provider -ne 'bedrock') {
+    throw 'The Spring AI Bedrock runtime uses the AWS Converse API. Use -Provider bedrock.'
+}
+if ([string]::IsNullOrWhiteSpace($Model)) {
+    $Model = if ($Runtime -eq 'spring-ai-bedrock') {
+        'global.anthropic.claude-haiku-4-5-20251001-v1:0'
+    } else {
+        'google.gemma-4-e2b'
+    }
+}
 
 $env:FINANCE_ASSISTANT_PROVIDER = $Provider
 $env:FINANCE_ASSISTANT_RUNTIME = $Runtime
@@ -33,7 +43,14 @@ $env:FINANCE_ASSISTANT_MODEL = $Model
 $env:FINANCE_ASSISTANT_FINAL_ANSWER_MAX_TOKENS = $FinalAnswerMaxTokens
 $env:FINANCE_ASSISTANT_TOOL_SELECTION_MAX_TOKENS = $ToolSelectionMaxTokens
 $env:FINANCE_SPRING_AI_ENABLED = if ($Runtime -eq 'spring-ai-lm-studio') { 'true' } else { 'false' }
-if ($Runtime -eq 'spring-ai-lm-studio') { $env:FINANCE_SPRING_AI_LM_STUDIO_BASE_URL = 'http://localhost:1234' }
+if ($Runtime -eq 'spring-ai-lm-studio') {
+    $env:FINANCE_SPRING_AI_LM_STUDIO_BASE_URL = 'http://localhost:1234'
+    $env:FINANCE_SPRING_AI_CHAT_MODEL = 'openai'
+} elseif ($Runtime -eq 'spring-ai-bedrock') {
+    $env:FINANCE_SPRING_AI_CHAT_MODEL = 'bedrock-converse'
+} else {
+    $env:FINANCE_SPRING_AI_CHAT_MODEL = 'none'
+}
 
 if ($Provider -eq 'bedrock-mantle') {
     $env:BEDROCK_REASONING_EFFORT = $ReasoningEffort

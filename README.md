@@ -125,6 +125,17 @@ The established Assistant runtime remains the default. To evaluate the new Sprin
 
 This enables Spring AI only for that process. It connects to LM Studio at `http://localhost:1234`, sends the same allow-listed read-only tools, and returns the same Assistant API shape and evidence. Stop the process and start normally (or use `-Runtime custom`) to return immediately to the proven V4 runtime. The Spring AI runtime remains an evaluation path until the V4 verification prompts pass with equivalent answers and tool traces.
 
+### Spring AI Bedrock Converse evaluation (V6, opt-in)
+
+Use Amazon Bedrock's native Converse API through Spring AI instead of the existing handwritten Bedrock adapter:
+
+```powershell
+$env:AWS_PROFILE = "finance-tracker-bedrock"
+./scripts/start-backend.ps1 -Provider bedrock -Runtime spring-ai-bedrock
+```
+
+The launcher selects Claude Haiku 4.5's global inference profile by default for this runtime. Your selected local AWS identity needs `bedrock:InvokeModel` permission for that model or inference profile; no Bedrock API key is used or stored. This is an opt-in evaluation path and sends only the question, bounded conversation context, tool definitions, and the individual tool results needed for an answer—not the SQLite database or raw statements.
+
 ## Verify changes
 
 ```powershell

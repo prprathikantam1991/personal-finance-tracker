@@ -10,6 +10,7 @@
 - Focused comparison tools return only the category and merchant evidence needed for a “why did this spending change?” question, instead of sending a broad transaction set to the model.
 - Multi-step traces are displayed in Angular as human-readable agent activity.
 - The Assistant screen now chooses the single-step or bounded multi-step route automatically; people ask naturally instead of selecting a technical “Assistant” or “Agent Run” mode. Agent activity remains visible only when the multi-step route is used.
+- Assistant answers render a deliberately small Markdown subset—headings, bold text, lists, inline code, and simple tables—after escaping model content. The UI never trusts or bypasses sanitization for model-provided HTML.
 - Period context is preserved for date-sensitive calls, optional presentation hints are removed, and redundant undated calls are stopped before they broaden a lookup.
 - Assistant-mode tool calls receive the same server-side resolved-period normalization and validation as Agent Run calls, so a model cannot silently widen a month-specific question to all saved history.
 - LM Studio remains supported; Amazon Bedrock Mantle with Gemma 4 31B has been verified for real sequential tool use.

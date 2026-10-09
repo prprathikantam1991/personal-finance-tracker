@@ -5,6 +5,7 @@ import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Locale;
@@ -185,6 +186,53 @@ public class LocalAssistantService {
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         String normalized = question.toLowerCase(Locale.ROOT);
         DateRange range = resolveRange(question, conversation, savedContext);
+        if (isUtilizationPaydownQuestion(normalized)) {
+            FinanceToolsService.CreditUtilization utilization = financeTools.creditUtilization();
+            BigDecimal target = utilizationTarget(normalized);
+            FinanceToolsService.CreditPaydownPlan plan = financeTools.creditPaydownPlan(target);
+            FinanceToolsService.CardUtilization highest = utilization.cards().stream()
+                    .max(Comparator.comparing(FinanceToolsService.CardUtilization::utilizationPercent,
+                            Comparator.nullsLast(Comparator.naturalOrder())))
+                    .orElse(null);
+            String highestText = highest == null ? "No card utilization snapshots are available."
+                    : "The credit card with the highest utilization is " + highest.accountName() + " •" + highest.lastFour()
+                    + ", at " + percent(highest.utilizationPercent()) + ".";
+            String paymentText = plan == null || !plan.planningAvailable()
+                    ? "A paydown calculation is not available because no eligible card limits were found."
+                    : plan.requiredPayment().signum() == 0
+                    ? "Your overall utilization is already below " + percent(target) + "."
+                    : "To bring overall utilization below " + percent(target) + ", pay " + money(plan.requiredPayment()) + ".";
+            return Optional.of(new AssistantChatResponse(highestText + "\n\n" + paymentText,
+                    List.of("get_credit_utilization", "get_credit_paydown_plan"), model, "FALLBACK",
+                    evidence(null, List.of("get_credit_utilization", "get_credit_paydown_plan"))));
+        }
+        if (isPaymentCoverageQuestion(normalized)) {
+            List<FinanceToolsService.AccountContext> accounts = financeTools.accountOverview();
+            List<FinanceToolsService.AccountContext> payments = accounts.stream()
+                    .filter(account -> account.accountType() == com.pradeep.finance.account.AccountType.CREDIT_CARD)
+                    .filter(account -> account.minimumPayment() != null && account.minimumPayment().signum() > 0)
+                    .filter(account -> account.paymentDueDate() != null)
+                    .sorted(Comparator.comparing(FinanceToolsService.AccountContext::paymentDueDate))
+                    .toList();
+            BigDecimal minimumDue = payments.stream().map(FinanceToolsService.AccountContext::minimumPayment).reduce(BigDecimal.ZERO, BigDecimal::add);
+            List<FinanceToolsService.AccountContext> cashAccounts = accounts.stream()
+                    .filter(account -> account.accountType() == com.pradeep.finance.account.AccountType.CHECKING
+                            || account.accountType() == com.pradeep.finance.account.AccountType.SAVINGS)
+                    .toList();
+            BigDecimal availableCash = cashAccounts.stream().map(FinanceToolsService.AccountContext::statementBalance)
+                    .filter(java.util.Objects::nonNull).filter(amount -> amount.signum() > 0).reduce(BigDecimal.ZERO, BigDecimal::add);
+            String paymentsText = payments.isEmpty() ? "No saved credit-card minimum payments have due dates." : payments.stream()
+                    .map(account -> "- " + account.name() + " •" + account.lastFour() + ": " + money(account.minimumPayment()) + " due on " + account.paymentDueDate())
+                    .reduce("Your upcoming minimum payments are:\n", (left, right) -> left + right + "\n");
+            String cashText = cashAccounts.stream()
+                    .map(account -> account.name() + " •" + account.lastFour() + ": " + money(account.statementBalance()))
+                    .reduce((left, right) -> left + "; " + right).orElse("No checking or savings balances are available.");
+            String coverage = availableCash.compareTo(minimumDue) >= 0 ? "enough" : "not enough";
+            String answer = paymentsText + "Total minimum payment due: " + money(minimumDue) + ".\n\n"
+                    + "Available checking and savings cash: " + money(availableCash) + " (" + cashText + "). This is " + coverage + " to cover the listed minimum payments.";
+            return Optional.of(new AssistantChatResponse(answer, List.of("get_account_overview"), model, "FALLBACK",
+                    evidence(null, List.of("get_account_overview"))));
+        }
         if (normalized.contains("credit utilization")) {
             FinanceToolsService.CreditUtilization data = financeTools.creditUtilization();
             boolean perCard = normalized.contains("each card") || normalized.contains("by card") || normalized.contains("per card");
@@ -208,6 +256,22 @@ public class LocalAssistantService {
             return Optional.of(new AssistantChatResponse(answer, List.of("search_transactions"), model, "FALLBACK", evidence(range, List.of("search_transactions"))));
         }
         return Optional.empty();
+    }
+
+    private boolean isUtilizationPaydownQuestion(String normalized) {
+        return normalized.contains("utilization") && normalized.matches("(?s).*\\bbelow\\s+\\d+(?:\\.\\d+)?%.*")
+                && (normalized.contains("how much") || normalized.contains("pay") || normalized.contains("highest"));
+    }
+
+    private BigDecimal utilizationTarget(String normalized) {
+        Matcher matcher = Pattern.compile("(?i)\\bbelow\\s+(\\d+(?:\\.\\d+)?)%").matcher(normalized);
+        if (!matcher.find()) throw new IllegalArgumentException("A utilization target is required.");
+        return new BigDecimal(matcher.group(1));
+    }
+
+    private boolean isPaymentCoverageQuestion(String normalized) {
+        return normalized.contains("payment") && (normalized.contains("due") || normalized.contains("minimum"))
+                && (normalized.contains("cash") || normalized.contains("checking") || normalized.contains("savings"));
     }
 
     private String systemPrompt() {

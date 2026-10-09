@@ -175,6 +175,42 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void fallsBackToGroundedUtilizationPaydownWhenTheModelDeclinesToolSelection() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"content\":\"\"}"));
+        when(financeTools.creditUtilization()).thenReturn(new FinanceToolsService.CreditUtilization(
+                BigDecimal.valueOf(58_000), BigDecimal.valueOf(6_599.20), BigDecimal.valueOf(51_400.80),
+                BigDecimal.valueOf(11.4), null, 1, 0, List.of(new FinanceToolsService.CardUtilization(
+                "Discover", "3558", BigDecimal.valueOf(6_491.58), BigDecimal.valueOf(12_500), BigDecimal.valueOf(6_008.42), BigDecimal.valueOf(51.9), null))));
+        when(financeTools.creditPaydownPlan(BigDecimal.TEN)).thenReturn(new FinanceToolsService.CreditPaydownPlan(
+                true, "", BigDecimal.TEN, BigDecimal.valueOf(58_000), BigDecimal.valueOf(6_599.20), BigDecimal.valueOf(11.4),
+                BigDecimal.valueOf(5_799.99), BigDecimal.valueOf(799.21), BigDecimal.valueOf(9.9), List.of()));
+
+        AgentRunResponse result = service.agentRun("- \u201cWhich credit card has the highest utilization, and how much should I pay to bring total utilization below 10%?\u201d", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("Discover •3558").contains("$799.21");
+        assertThat(result.toolsUsed()).containsExactly("get_credit_utilization", "get_credit_paydown_plan");
+        verify(financeTools).creditPaydownPlan(BigDecimal.TEN);
+    }
+
+    @Test
+    void fallsBackToGroundedPaymentCoverageWhenTheModelDeclinesToolSelection() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"content\":\"\"}"));
+        when(financeTools.accountOverview()).thenReturn(List.of(
+                account("Discover", "3558", com.pradeep.finance.account.AccountType.CREDIT_CARD, BigDecimal.valueOf(130), java.time.LocalDate.of(2026, 10, 3)),
+                account("Wells Fargo", "0286", com.pradeep.finance.account.AccountType.CREDIT_CARD, BigDecimal.valueOf(25), java.time.LocalDate.of(2026, 10, 5)),
+                account("Checking", "6643", com.pradeep.finance.account.AccountType.CHECKING, BigDecimal.valueOf(2336.16), null),
+                account("Savings", "7835", com.pradeep.finance.account.AccountType.SAVINGS, BigDecimal.valueOf(6440.48), null)));
+
+        AgentRunResponse result = service.agentRun("- \u201cWhat payments are due next, and do I have enough available cash across checking and savings to cover their minimum payments?\u201d", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("$155.00").contains("$8,776.64").contains("enough");
+        assertThat(result.toolsUsed()).containsExactly("get_account_overview");
+        verify(financeTools).accountOverview();
+    }
+
+    @Test
     void calculatesMerchantFollowUpsFromDateFilteredTransactionsRatherThanTopMerchantAggregates() {
         when(financeTools.searchTransactions(eq(null), eq(java.time.LocalDate.of(2026, 8, 1)), eq(java.time.LocalDate.of(2026, 8, 31)), eq(null), eq("Patel Brothers")))
                 .thenReturn(List.of(new com.pradeep.finance.transaction.TransactionResponse(
@@ -316,5 +352,13 @@ class AgentRunEvaluationTest {
 
     private JsonNode responseWithFinishReason(String message, String finishReason) throws Exception {
         return objectMapper.readTree("{\"choices\":[{\"message\":" + message + ",\"finish_reason\":\"" + finishReason + "\"}]}");
+    }
+
+    private FinanceToolsService.AccountContext account(String name, String lastFour, com.pradeep.finance.account.AccountType type,
+                                                        BigDecimal balanceOrMinimum, java.time.LocalDate dueDate) {
+        BigDecimal minimumPayment = type == com.pradeep.finance.account.AccountType.CREDIT_CARD ? balanceOrMinimum : null;
+        BigDecimal statementBalance = type == com.pradeep.finance.account.AccountType.CREDIT_CARD ? BigDecimal.ZERO : balanceOrMinimum;
+        return new FinanceToolsService.AccountContext("account-" + lastFour, name, "Test", type, lastFour,
+                statementBalance, null, null, null, null, null, null, minimumPayment, dueDate, null, null);
     }
 }

@@ -1,6 +1,6 @@
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { ImportsApiService, ImportHistoryItem, ImportResult, StatementCoverage } from '../core/imports-api.service';
+import { ImportsApiService, ImportHistoryItem, ImportResult, IncomingStatementItem, StatementCoverage } from '../core/imports-api.service';
 import { Router } from '@angular/router';
 
 @Component({ selector: 'app-imports-page', imports: [DatePipe, DecimalPipe], templateUrl: './imports-page.html', styleUrl: './imports-page.scss' })
@@ -12,10 +12,17 @@ export class ImportsPage implements OnInit {
   protected readonly error = signal<string | null>(null);
   protected readonly result = signal<ImportResult | null>(null);
   protected readonly history = signal<ImportHistoryItem[]>([]);
-  protected readonly historyStatus = signal<'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED'>('ALL');
+  protected readonly historyStatus = signal<'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED' | 'NEEDS_ATTENTION'>('ALL');
+  protected readonly incoming = signal<IncomingStatementItem[]>([]);
+  protected readonly importRows = computed<ImportListRow[]>(() => [
+    ...this.history().map(item => ({ kind: 'IMPORTED' as const, item })),
+    ...this.incoming().map(item => ({ kind: 'INCOMING' as const, item })),
+  ].sort((left, right) => this.rowDate(right).localeCompare(this.rowDate(left))));
   protected readonly filteredHistory = computed(() => this.historyStatus() === 'ALL'
-    ? this.history()
-    : this.history().filter(item => item.status === this.historyStatus()));
+    ? this.importRows()
+    : this.importRows().filter(row => row.kind === 'INCOMING'
+      ? this.historyStatus() === 'NEEDS_ATTENTION'
+      : row.item.status === this.historyStatus()));
   protected readonly historyError = signal<string | null>(null);
   protected readonly uploadDialogOpen = signal(false);
   protected readonly coverage = signal<StatementCoverage | null>(null);
@@ -23,7 +30,7 @@ export class ImportsPage implements OnInit {
   protected readonly coverageYear = signal(new Date().getFullYear());
   protected readonly coverageYears = Array.from({ length: 4 }, (_, index) => new Date().getFullYear() - index);
 
-  ngOnInit(): void { this.loadHistory(); this.loadCoverage(); }
+  ngOnInit(): void { this.loadHistory(); this.loadIncoming(); this.loadCoverage(); }
 
   protected selectFile(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0] ?? null;
@@ -41,7 +48,7 @@ export class ImportsPage implements OnInit {
     this.importing.set(true);
     this.error.set(null);
     this.importsApi.upload(file).subscribe({
-      next: (result) => { this.result.set(result); this.importing.set(false); this.uploadDialogOpen.set(false); this.loadHistory(); this.loadCoverage(); this.router.navigate(['/imports', result.importId, 'review']); },
+      next: (result) => { this.result.set(result); this.importing.set(false); this.uploadDialogOpen.set(false); this.loadHistory(); this.loadIncoming(); this.loadCoverage(); this.router.navigate(['/imports', result.importId, 'review']); },
       error: (response) => { this.error.set(response.error?.message ?? 'Upload failed. Make sure the backend is running and try again.'); this.importing.set(false); },
     });
   }
@@ -56,7 +63,7 @@ export class ImportsPage implements OnInit {
     this.loadCoverage();
   }
   protected selectHistoryStatus(event: Event): void {
-    this.historyStatus.set((event.target as HTMLSelectElement).value as 'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED');
+    this.historyStatus.set((event.target as HTMLSelectElement).value as 'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED' | 'NEEDS_ATTENTION');
   }
 
   private loadHistory(): void {
@@ -65,6 +72,10 @@ export class ImportsPage implements OnInit {
       error: () => this.historyError.set('Import history is temporarily unavailable.'),
     });
   }
+  private loadIncoming(): void {
+    this.importsApi.incoming().subscribe({ next: incoming => this.incoming.set(incoming) });
+  }
+  protected rowDate(row: ImportListRow): string { return row.kind === 'IMPORTED' ? row.item.importedAt : row.item.modifiedAt; }
 
   private loadCoverage(): void {
     this.coverageError.set(null);
@@ -74,3 +85,7 @@ export class ImportsPage implements OnInit {
     });
   }
 }
+
+type ImportListRow =
+  | { kind: 'IMPORTED'; item: ImportHistoryItem }
+  | { kind: 'INCOMING'; item: IncomingStatementItem };

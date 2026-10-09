@@ -47,6 +47,8 @@ Incoming folder scan → validate file → import pipeline
 
 A recognized statement that contains a usable account snapshot but **no transaction activity** is also confirmed and archived. For example, a zero-balance credit-card statement can still update the saved limit, available credit, APR, due date, and statement period. An unrecognized zero-row file remains in the inbox rather than being silently accepted.
 
+When a statement layout identifies its institution and account type but omits the last four digits, the importer may match the **sole** saved account of that institution and type. This is intentionally not a broad name match: if more than one compatible local account exists, the file remains in the inbox for confirmation. Re-importing a previously unresolved file also backfills its import and transaction account links once a later parser rule identifies the account.
+
 ## Statement coverage tracker
 
 ```mermaid

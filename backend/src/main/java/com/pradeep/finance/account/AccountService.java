@@ -80,6 +80,23 @@ public class AccountService {
                 "This Bilt statement does not show a card ending, so it cannot be matched safely when multiple Bilt cards exist.");
     }
 
+    /**
+     * Some banking statement layouts omit a visible account ending. A fallback is safe only when
+     * exactly one saved account has the stated institution and type; otherwise import review is
+     * required rather than guessing.
+     */
+    @Transactional(readOnly = true)
+    public AccountIdentificationResponse identifySoleAccount(String institution, AccountType accountType) {
+        String normalizedInstitution = normalizeInstitution(institution);
+        List<Account> matches = accountRepository.findAllByOrderByInstitutionAscNameAsc().stream()
+                .filter(account -> normalizedInstitution.equalsIgnoreCase(account.getInstitution()))
+                .filter(account -> accountType == account.getAccountType()).toList();
+        if (matches.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
+                AccountResponse.from(matches.getFirst()), "Matched the sole saved " + institution + " " + accountType.name().toLowerCase(Locale.ROOT).replace('_', ' ') + " account.");
+        return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.CONFIRMATION_REQUIRED, null,
+                "The statement does not show an account ending, so it cannot be matched safely when multiple compatible accounts exist.");
+    }
+
     private AccountIdentificationResponse createAccount(
             AccountIdentificationRequest request,
             String institution,

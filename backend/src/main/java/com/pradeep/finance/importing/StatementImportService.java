@@ -39,6 +39,7 @@ public class StatementImportService {
     private static final Pattern WELLS_ACCOUNT_ENDING = Pattern.compile("(?i)account ending in\\s+(\\d{4})");
     private static final Pattern WELLS_CHECKING_ACCOUNT = Pattern.compile("(?i)account number:\\s*\\d*(\\d{4})");
     private static final Pattern BILT_CSV_CARD_LAST_FOUR = Pattern.compile("(?m)^\\d{4}-\\d{2}-\\d{2},(?:[^,\\r\\n]*,){3}\\s*(\\d{4})\\s*,");
+    private static final Pattern AMEX_CSV_ACCOUNT_LAST_FOUR = Pattern.compile("(?m),\\s*-(\\d{4})\\s*,");
 
     private final StatementTextExtractor textExtractor;
     private final List<StatementTransactionParser> transactionParsers;
@@ -89,6 +90,7 @@ public class StatementImportService {
             refreshStatementSummary(existingImportId, statementSummary);
             String accountId = accountIdentification.account() == null ? null : accountIdentification.account().id();
             associateImportWithAccountIfMissing(existingImportId, accountId);
+            associateUnassignedTransactions(existingImportId, accountId);
             backfillPreviouslyEmptyImport(existingImportId, accountId, transactions);
             reconcileBiltTransactions(existingImportId, transactions, accountIdsBySourceLastFour);
             return new StatementImportResponse(existingImportId, sanitizeFilename(statement.getOriginalFilename()), ImportStatus.REVIEW_REQUIRED,
@@ -223,6 +225,9 @@ public class StatementImportService {
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "Bilt", AccountType.CREDIT_CARD, lastFour, "Bilt •" + lastFour, "USD"));
         }
+        if (text.contains("Wells Fargo Bilt Mastercard") && text.contains("Wells Fargo Autograph")) {
+            return accountService.reconcileBiltToWellsAutograph("9484");
+        }
         Matcher bankOfAmericaCardMatch = BOFA_CARD_NUMBER.matcher(text);
         if ((text.contains("Visa Signature") || text.contains("Total Credit Line")) && bankOfAmericaCardMatch.find()) {
             String lastFour = bankOfAmericaCardMatch.group(1);
@@ -260,6 +265,15 @@ public class StatementImportService {
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "American Express", savings ? AccountType.SAVINGS : AccountType.CHECKING, lastFour,
                     "American Express " + (savings ? "Savings" : "Checking") + " •" + lastFour, "USD"));
+        }
+        if (text.contains("American Express National Bank") && text.contains("Rewards Checking")) {
+            return accountService.identifySoleAccount("American Express", AccountType.CHECKING);
+        }
+        Matcher amexCsvAccountMatch = AMEX_CSV_ACCOUNT_LAST_FOUR.matcher(text);
+        if (text.startsWith("Date,Description,Card Member,Account #") && amexCsvAccountMatch.find()) {
+            String lastFour = amexCsvAccountMatch.group(1);
+            return accountService.identifyOrCreate(new AccountIdentificationRequest(
+                    "American Express", AccountType.CREDIT_CARD, lastFour, "American Express •" + lastFour, "USD"));
         }
         Matcher amexAccountMatch = AMEX_ACCOUNT_ENDING.matcher(text);
         if (text.contains("American Express") && amexAccountMatch.find()) {
@@ -407,6 +421,11 @@ public class StatementImportService {
     private void associateImportWithAccountIfMissing(String importId, String accountId) {
         if (accountId == null) return;
         jdbcTemplate.update("UPDATE statement_imports SET account_id = ? WHERE id = ? AND account_id IS NULL", accountId, importId);
+    }
+
+    private void associateUnassignedTransactions(String importId, String accountId) {
+        if (accountId == null) return;
+        jdbcTemplate.update("UPDATE transactions SET account_id = ? WHERE import_id = ? AND account_id IS NULL", accountId, importId);
     }
 
     private void backfillPreviouslyEmptyImport(String importId, String accountId, List<ParsedTransaction> transactions) {

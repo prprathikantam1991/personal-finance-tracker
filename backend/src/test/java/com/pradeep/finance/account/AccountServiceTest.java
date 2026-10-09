@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import java.util.Optional;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -48,5 +49,31 @@ class AccountServiceTest {
         assertThat(response.account().institution()).isEqualTo("example bank");
         assertThat(response.account().lastFour()).isEqualTo("1234");
         assertThat(response.account().currency()).isEqualTo("USD");
+    }
+
+    @Test
+    void matchesSoleInstitutionAndAccountTypeWhenStatementOmitsLastFour() {
+        Account checking = new Account("American Express Checking •3185", "american express", AccountType.CHECKING,
+                "3185", "american express|3185", "USD");
+        checking.initializePersistenceFields();
+        when(accountRepository.findAllByOrderByInstitutionAscNameAsc()).thenReturn(List.of(checking));
+
+        var response = accountService.identifySoleAccount("American Express", AccountType.CHECKING);
+
+        assertThat(response.status()).isEqualTo(AccountIdentificationResponse.AccountMatchStatus.MATCHED);
+        assertThat(response.account().lastFour()).isEqualTo("3185");
+    }
+
+    @Test
+    void requestsConfirmationWhenMoreThanOneCompatibleAccountExists() {
+        Account first = new Account("American Express Checking •3185", "american express", AccountType.CHECKING,
+                "3185", "american express|3185", "USD");
+        Account second = new Account("American Express Checking •1234", "american express", AccountType.CHECKING,
+                "1234", "american express|1234", "USD");
+        when(accountRepository.findAllByOrderByInstitutionAscNameAsc()).thenReturn(List.of(first, second));
+
+        var response = accountService.identifySoleAccount("American Express", AccountType.CHECKING);
+
+        assertThat(response.status()).isEqualTo(AccountIdentificationResponse.AccountMatchStatus.CONFIRMATION_REQUIRED);
     }
 }

@@ -61,7 +61,7 @@ public class DashboardService {
             previous = merchantTotals(previousEnd.minusDays(days - 1), previousEnd);
         }
         Map<String, MerchantTotal> previousTotals = previous;
-        return current.entrySet().stream().map(entry -> {
+        return current.entrySet().stream().filter(entry -> entry.getValue().amount().signum() > 0).map(entry -> {
             MerchantTotal total = entry.getValue();
             return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), previousTotals.getOrDefault(entry.getKey(), MerchantTotal.empty()).amount());
         }).sorted(java.util.Comparator.comparing(MerchantSpending::amount).reversed()).limit(5).toList();
@@ -72,7 +72,7 @@ public class DashboardService {
      */
     public List<MerchantSpending> merchantSpending(LocalDate from, LocalDate to, String category) {
         Map<String, MerchantTotal> current = merchantTotals(from, to, category);
-        return current.entrySet().stream().map(entry -> {
+        return current.entrySet().stream().filter(entry -> entry.getValue().amount().signum() > 0).map(entry -> {
             MerchantTotal total = entry.getValue();
             return new MerchantSpending(entry.getKey(), total.category(), total.amount(), total.count(), BigDecimal.ZERO);
         }).sorted(java.util.Comparator.comparing(MerchantSpending::amount).reversed()).limit(10).toList();
@@ -92,7 +92,6 @@ public class DashboardService {
             String merchant = merchantNormalizer.normalize(rs.getString("description"));
             BigDecimal amount = rs.getBigDecimal("amount");
             BigDecimal spend = "CREDIT_CARD".equals(rs.getString("account_type")) ? amount : amount.negate();
-            if (spend.signum() <= 0) return;
             MerchantTotal existing = totals.getOrDefault(merchant, MerchantTotal.empty());
             totals.put(merchant, new MerchantTotal(rs.getString("category"), existing.amount().add(spend), existing.count() + 1));
         }, from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString(),

@@ -35,6 +35,10 @@ public abstract class SpringAiAssistantService implements AssistantRuntime {
 
     @Override
     public AssistantChatResponse chat(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
+        if (AssistantQuestionPolicy.needsSpendingPeriodClarification(question, savedContext)) {
+            return new AssistantChatResponse("Which period should I use—last month, a specific month, or all saved history?",
+                    List.of(), model, "CLARIFICATION_REQUIRED", evidence(List.of()));
+        }
         try (ToolExecutionTrace.TraceSession trace = toolTrace.open()) {
             String answer = chatClient.prompt()
                     .system(systemPrompt(conversation, savedContext))

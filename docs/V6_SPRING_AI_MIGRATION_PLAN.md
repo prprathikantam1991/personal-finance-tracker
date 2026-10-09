@@ -81,6 +81,8 @@ Angular Assistant → Spring Boot → Spring AI ChatClient → Bedrock Mantle Ch
 
 This choice was made after live endpoint verification on October 9, 2026. A single-tool credit-utilization question selected `get_credit_utilization`, returned a grounded result, and produced `SPRING_AI_TOOL_CALL` evidence. A multi-tool July/August comparison selected `compare_periods` and `get_merchant_spending`, then returned grounded comparison and merchant results with matching evidence.
 
+Verification also established two application-level grounding rules that do not depend on model behavior: an otherwise undated “How much did I spend?” question receives a period clarification instead of silently defaulting to the current month, and merchant spending nets refunds before presenting merchant totals so its breakdown reconciles with the category total.
+
 Gemma 4 31B is accessed through Mantle's OpenAI-compatible Chat Completions route, not Bedrock Converse. This is intentional: AWS currently lists Chat Completions and Responses for Gemma 4 31B/E2B, while Converse is unavailable for those models. The native Converse path remains a supported alternative for compatible models such as Claude.
 
 ## Safety contract

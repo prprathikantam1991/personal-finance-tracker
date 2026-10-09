@@ -31,6 +31,12 @@ export class AssistantPage implements OnInit {
   }
 
   protected updateDraft(event: Event): void { this.draft.set((event.target as HTMLTextAreaElement).value); }
+  protected submitWithEnter(event: Event): void {
+    const keyEvent = event as KeyboardEvent;
+    if (keyEvent.shiftKey || keyEvent.isComposing) return;
+    event.preventDefault();
+    this.ask();
+  }
   protected askSuggestion(question: string): void { this.draft.set(question); this.ask(); }
   protected ask(): void {
     const question = this.draft().trim();

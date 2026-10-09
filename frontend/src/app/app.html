@@ -16,8 +16,6 @@
       </div>
     </div>
   </header>
-  <div class="workspace" [class.with-assistant]="!isAssistantPage()">
-    <main class="page-content"><router-outlet /></main>
-    @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><div class="assistant-launcher-heading"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong></div><textarea #assistantQuestion rows="4" placeholder="Ask about spending, accounts, payments, or trends…" aria-label="Ask Finance AI"></textarea><button type="submit">Ask</button></form> }
-  </div>
+  <main class="page-content"><router-outlet /></main>
+  @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><div class="assistant-launcher-heading"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong></div><textarea #assistantQuestion rows="4" placeholder="Ask about spending, accounts, payments, or trends…" aria-label="Ask Finance AI"></textarea><button type="submit">Ask</button></form> }
 </div>

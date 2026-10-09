@@ -194,6 +194,24 @@ class AgentRunEvaluationTest {
     }
 
     @Test
+    void fallsBackToGroundedPeriodComparisonAndTopMerchantsWhenTheModelDeclinesToolSelection() throws Exception {
+        when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"content\":\"\"}"));
+        when(financeTools.comparePeriods(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31), java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31)))
+                .thenReturn(new FinanceToolsService.PeriodComparison(
+                        new FinanceToolsService.Period(java.time.LocalDate.of(2026, 7, 1), java.time.LocalDate.of(2026, 7, 31), summary(8627.99, 1977.38, 2076.41, 4574.20)),
+                        new FinanceToolsService.Period(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31), summary(4298.36, 332.60, 3929.31, 36.45))));
+        when(financeTools.merchantSpending(java.time.LocalDate.of(2026, 8, 1), java.time.LocalDate.of(2026, 8, 31))).thenReturn(List.of(
+                new com.pradeep.finance.dashboard.MerchantSpending("Patel Brothers", "Groceries", BigDecimal.valueOf(68.05), 3, null),
+                new com.pradeep.finance.dashboard.MerchantSpending("Bottle King", "Shopping", BigDecimal.valueOf(54.35), 1, null)));
+
+        AgentRunResponse result = service.agentRun("- \u201cCompare July and August 2026, then show the top five merchants for August.\u201d", List.of());
+
+        assertThat(result.stopReason()).isEqualTo("FALLBACK");
+        assertThat(result.answer()).contains("July 2026 vs. August 2026").contains("Patel Brothers: $68.05");
+        assertThat(result.toolsUsed()).containsExactly("compare_periods", "get_merchant_spending");
+    }
+
+    @Test
     void fallsBackToGroundedPaymentCoverageWhenTheModelDeclinesToolSelection() throws Exception {
         when(localModelClient.complete(any(), any(), anyInt())).thenReturn(response("{\"role\":\"assistant\",\"content\":\"\"}"));
         when(financeTools.accountOverview()).thenReturn(List.of(
@@ -360,5 +378,10 @@ class AgentRunEvaluationTest {
         BigDecimal statementBalance = type == com.pradeep.finance.account.AccountType.CREDIT_CARD ? BigDecimal.ZERO : balanceOrMinimum;
         return new FinanceToolsService.AccountContext("account-" + lastFour, name, "Test", type, lastFour,
                 statementBalance, null, null, null, null, null, null, minimumPayment, dueDate, null, null);
+    }
+
+    private com.pradeep.finance.dashboard.DashboardSummary summary(double income, double expenses, double remittance, double netCashFlow) {
+        return new com.pradeep.finance.dashboard.DashboardSummary(BigDecimal.valueOf(income), BigDecimal.valueOf(expenses),
+                BigDecimal.valueOf(remittance), BigDecimal.valueOf(netCashFlow), 0, List.of());
     }
 }

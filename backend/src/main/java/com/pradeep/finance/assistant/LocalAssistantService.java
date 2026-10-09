@@ -186,6 +186,26 @@ public class LocalAssistantService {
     private Optional<AssistantChatResponse> directAnswer(String question, List<AssistantConversationMessage> conversation, ConversationContext savedContext) {
         String normalized = question.toLowerCase(Locale.ROOT);
         DateRange range = resolveRange(question, conversation, savedContext);
+        if (isPeriodComparisonWithMerchants(normalized, question)) {
+            ComparisonRange periods = comparisonRange(question);
+            FinanceToolsService.PeriodComparison comparison = financeTools.comparePeriods(
+                    periods.first().from(), periods.first().to(), periods.second().from(), periods.second().to());
+            List<com.pradeep.finance.dashboard.MerchantSpending> merchants = financeTools.merchantSpending(
+                    periods.second().from(), periods.second().to()).stream().limit(5).toList();
+            com.pradeep.finance.dashboard.DashboardSummary first = comparison.selectedPeriod().summary();
+            com.pradeep.finance.dashboard.DashboardSummary second = comparison.comparisonPeriod().summary();
+            String answer = "Comparison: " + periodLabel(periods.first()) + " vs. " + periodLabel(periods.second()) + "\n"
+                    + "- Income: " + money(first.income()) + " → " + money(second.income()) + " (" + signedMoney(second.income().subtract(first.income())) + ")\n"
+                    + "- Expenses: " + money(first.expenses()) + " → " + money(second.expenses()) + " (" + signedMoney(second.expenses().subtract(first.expenses())) + ")\n"
+                    + "- India remittance: " + money(first.indiaRemittance()) + " → " + money(second.indiaRemittance()) + " (" + signedMoney(second.indiaRemittance().subtract(first.indiaRemittance())) + ")\n"
+                    + "- Net cash flow: " + money(first.netCashFlow()) + " → " + money(second.netCashFlow()) + " (" + signedMoney(second.netCashFlow().subtract(first.netCashFlow())) + ")\n\n"
+                    + "Top " + merchants.size() + " merchants for " + periodLabel(periods.second()) + ":\n"
+                    + (merchants.isEmpty() ? "- No confirmed merchant spending was found." : merchants.stream()
+                    .map(merchant -> "- " + merchant.merchant() + ": " + money(merchant.amount()))
+                    .reduce((left, right) -> left + "\n" + right).orElse(""));
+            return Optional.of(new AssistantChatResponse(answer, List.of("compare_periods", "get_merchant_spending"), model, "FALLBACK",
+                    evidence(new DateRange(periods.first().from(), periods.second().to()), List.of("compare_periods", "get_merchant_spending"))));
+        }
         if (isUtilizationPaydownQuestion(normalized)) {
             FinanceToolsService.CreditUtilization utilization = financeTools.creditUtilization();
             BigDecimal target = utilizationTarget(normalized);
@@ -262,6 +282,13 @@ public class LocalAssistantService {
         return normalized.contains("utilization") && normalized.matches("(?s).*\\bbelow\\s+\\d+(?:\\.\\d+)?%.*")
                 && (normalized.contains("how much") || normalized.contains("pay") || normalized.contains("highest"));
     }
+
+    private boolean isPeriodComparisonWithMerchants(String normalized, String question) {
+        return normalized.contains("compare") && normalized.contains("merchant") && comparisonRange(question) != null;
+    }
+
+    private String periodLabel(DateRange range) { return YearMonth.from(range.from()).getMonth().getDisplayName(java.time.format.TextStyle.FULL, Locale.US) + " " + range.from().getYear(); }
+    private String signedMoney(BigDecimal amount) { return (amount.signum() > 0 ? "+" : amount.signum() < 0 ? "-" : "") + money(amount.abs()); }
 
     private BigDecimal utilizationTarget(String normalized) {
         Matcher matcher = Pattern.compile("(?i)\\bbelow\\s+(\\d+(?:\\.\\d+)?)%").matcher(normalized);

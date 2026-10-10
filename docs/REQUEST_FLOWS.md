@@ -51,6 +51,10 @@ When a statement layout identifies its institution and account type but omits th
 
 A legacy Wells Fargo Bilt-to-Autograph conversion notice is a separate safe case: it is matched to the preserved Autograph credit line and archived after confirmation even when it contains neither transactions nor a statement snapshot. The application records the import but does not create financial activity from an informational notice.
 
+## Planned V7 authenticated request and Plaid connection
+
+V7 will validate a Finance Tracker application identity before resolving any finance data. The authenticated user's stable internal ID becomes the mandatory owner boundary for imports, ledger data, Assistant history, notifications, and future Plaid Items. A Plaid access token will be exchanged and stored only by the backend, encrypted and scoped to that owner; the browser sees a short-lived Link token and connection status only. See the [V7 implementation plan](V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md) for the full lifecycle and security constraints.
+
 ## Statement coverage tracker
 
 ```mermaid

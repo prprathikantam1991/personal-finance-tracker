@@ -19,6 +19,6 @@
 ## Planned backlog
 
 - **V5:** optional production polish: Docker, backups, encryption planning, CI/CD, PostgreSQL, and deployment.
-- **V7:** multi-user and connected finance — introduce authentication, strict user data isolation, then evaluate optional Plaid connections. See GitHub Issue #20.
+- **V7:** multi-user and connected finance — introduce authentication, strict user data isolation, then add optional Plaid connections. See the [V7 implementation plan](V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md) and GitHub Issue #20.
 - **V8:** mobile finance experience — decide between a responsive PWA and a native/cross-platform client after user identity and sync boundaries are established. See GitHub Issue #21.
 - **V10:** explicit long-term Assistant preferences — local, visible, editable, and deletable preferences kept separate from chat history and ledger data. See [V10 plan](V10_EXPLICIT_MEMORY_PLAN.md).

@@ -33,3 +33,7 @@ The native Spring AI Bedrock Converse path remains available for models that sup
 ## No cloud infrastructure yet
 
 Docker, Terraform, CloudFormation, authentication, CI/CD, and hosted deployment are intentionally deferred. Adding empty configuration before a deployment target exists would create maintenance burden without user value.
+
+## V7: identity before connected finance
+
+The application will not connect Plaid to the current shared single-user ledger. V7 first introduces a validated identity contract, explicit `owner_user_id` data isolation, and a migration of existing local records to the initial owner. Only then can an optional owner-scoped Plaid Item be stored encrypted and synchronized. The existing Auth and User services are candidates to provide Google sign-in and a canonical identity, but they require a documented application-token contract and a security hardening pass before becoming a Finance Tracker dependency. See the [V7 implementation plan](V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md).

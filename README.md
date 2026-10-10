@@ -165,4 +165,5 @@ cd frontend; npm run build
 - [V9 persistent-agent-memory plan](docs/V9_PERSISTENT_AGENT_MEMORY_PLAN.md) — backend-owned conversation history, safe bounded context, and retention design.
 - [V10 explicit-memory plan](docs/V10_EXPLICIT_MEMORY_PLAN.md) — user-controlled durable Assistant preferences, separate from chat history and ledger data.
 - [V6 Spring AI delivery](docs/V6_DELIVERY.md) and [migration plan](docs/V6_SPRING_AI_MIGRATION_PLAN.md) — supported Gemma runtime, verification evidence, and the retained rollback path.
+- [V7 authentication and Plaid implementation plan](docs/V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md) — staged identity hardening, per-user ledger isolation, and optional connected-account design.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

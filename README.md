@@ -87,19 +87,16 @@ Open `http://localhost:4200`.
 
 The default model connection can be overridden with `LM_STUDIO_BASE_URL`, `LM_STUDIO_MODEL`, and `LM_STUDIO_API_KEY`. Do not put keys in source code.
 
-### Amazon Bedrock Assistant (opt-in)
+### Amazon Bedrock Assistant
 
-The default remains LM Studio. To use the Bedrock Runtime adapter, grant the local AWS identity permission to invoke an approved model, then start the backend with a local AWS profile:
+The supported cloud assistant path uses Spring AI with Google Gemma 4 31B through Bedrock Mantle. It sends only the question, bounded conversation context, approved tool definitions, and the compact tool results needed for an answer—not the SQLite database or raw statements.
 
 ```powershell
-$env:FINANCE_ASSISTANT_PROVIDER = "bedrock"
-$env:FINANCE_ASSISTANT_MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
-$env:AWS_PROFILE = "finance-tracker-bedrock"
-cd backend
-mvn spring-boot:run
+$env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-mantle-api-key"
+./scripts/start-backend.ps1
 ```
 
-The Runtime/Converse adapter uses the standard AWS credential chain; it does not store an access key, statement, database, or account number in application configuration. Bedrock receives only the question, approved tool definitions, and compact tool results needed for the answer. Mantle-only models, including Gemma 4 31B, use a separate OpenAI-compatible adapter with `AWS_BEARER_TOKEN_BEDROCK` (or the app alias `BEDROCK_API_KEY`). GPT-5.6 Luna uses Bedrock's separate OpenAI Responses interface and will be evaluated through its own adapter.
+Gemma uses Mantle's OpenAI-compatible Chat Completions route, not Bedrock Converse. The bearer token is session-only and is never stored in source control, SQLite, or application configuration. Native Bedrock Converse remains available as an alternative for compatible models such as Claude Haiku.
 
 To evaluate Google Gemma 4 E2B through Mantle, set `FINANCE_ASSISTANT_MODEL=google.gemma-4-e2b`. The optional `BEDROCK_REASONING_EFFORT=high` setting is passed through only to Mantle requests and is recommended by AWS for this model.
 
@@ -114,17 +111,17 @@ $env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-api-key"
 ./scripts/start-backend.ps1
 ```
 
-The defaults start Bedrock Mantle with `google.gemma-4-e2b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. To preview the effective configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. You can select another model without editing source code, for example `./scripts/start-backend.ps1 -Model google.gemma-4-31b -ReasoningEffort ''`.
+The defaults start the supported Spring AI Bedrock Mantle path with `google.gemma-4-31b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. To preview the effective configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. The earlier custom runtime remains available only as an explicit rollback: `./scripts/start-backend.ps1 -Runtime custom`.
 
-### Spring AI LM Studio evaluation (V6, opt-in)
+### Spring AI LM Studio alternative
 
-The established Assistant runtime remains the default. To evaluate the new Spring AI `ChatClient` path against a tool-capable model loaded in LM Studio, use:
+To run the same Spring AI `ChatClient` path against a tool-capable model loaded in LM Studio, use:
 
 ```powershell
 ./scripts/start-backend.ps1 -Provider lm-studio -Runtime spring-ai-lm-studio -Model your-loaded-model-id
 ```
 
-This enables Spring AI only for that process. It connects to LM Studio at `http://localhost:1234`, sends the same allow-listed read-only tools, and returns the same Assistant API shape and evidence. Stop the process and start normally (or use `-Runtime custom`) to return immediately to the proven V4 runtime. The Spring AI runtime remains an evaluation path until the V4 verification prompts pass with equivalent answers and tool traces.
+This connects to LM Studio at `http://localhost:1234`, sends the same allow-listed read-only tools, and returns the same Assistant API shape and evidence. Use `-Runtime custom` only when diagnosing a regression in the retained rollback runtime.
 
 ### Spring AI Bedrock Converse evaluation (V6, opt-in)
 
@@ -137,16 +134,16 @@ $env:AWS_PROFILE = "finance-tracker-bedrock"
 
 The launcher selects Claude Haiku 4.5's global inference profile by default for this runtime. Your selected local AWS identity needs `bedrock:InvokeModel` permission for that model or inference profile; no Bedrock API key is used or stored. This is an opt-in evaluation path and sends only the question, bounded conversation context, tool definitions, and the individual tool results needed for an answer—not the SQLite database or raw statements.
 
-### Spring AI Gemma through Bedrock Mantle (V6, opt-in)
+### Spring AI Gemma through Bedrock Mantle
 
-To retain the previously evaluated Gemma model while replacing the handwritten `RestClient` protocol code with Spring AI, use the Mantle-specific runtime:
+The normal launcher command above selects this supported runtime. To state the choice explicitly, use:
 
 ```powershell
 $env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-mantle-api-key"
 ./scripts/start-backend.ps1 -Provider bedrock-mantle -Runtime spring-ai-bedrock-mantle
 ```
 
-It defaults to `google.gemma-4-31b`. This is the selected V6 cloud evaluation runtime and has been live-verified with both single-tool and multi-tool finance questions. It uses the same Bedrock Mantle OpenAI-compatible endpoint and session-only API token as the existing Gemma runtime; it does not use Bedrock Converse or require `bedrock:InvokeModel` IAM permission.
+It defaults to `google.gemma-4-31b`. This V6 runtime passed single-tool and multi-tool finance verification with matching evidence and traces. It uses the Bedrock Mantle OpenAI-compatible endpoint and session-only API token; it does not use Bedrock Converse or require `bedrock:InvokeModel` IAM permission.
 
 ## Verify changes
 
@@ -167,5 +164,5 @@ cd frontend; npm run build
 - [V5 production-polish plan](docs/V5_PRODUCTION_POLISH_PLAN.md) — optional future hardening.
 - [V9 persistent-agent-memory plan](docs/V9_PERSISTENT_AGENT_MEMORY_PLAN.md) — backend-owned conversation history, safe bounded context, and retention design.
 - [V10 explicit-memory plan](docs/V10_EXPLICIT_MEMORY_PLAN.md) — user-controlled durable Assistant preferences, separate from chat history and ledger data.
-- [V6 Spring AI migration plan](docs/V6_SPRING_AI_MIGRATION_PLAN.md) — opt-in migration from handwritten provider calls to Spring AI while preserving the local, read-only tool boundary.
+- [V6 Spring AI delivery](docs/V6_DELIVERY.md) and [migration plan](docs/V6_SPRING_AI_MIGRATION_PLAN.md) — supported Gemma runtime, verification evidence, and the retained rollback path.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

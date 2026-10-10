@@ -2,7 +2,7 @@ param(
     [ValidateSet('lm-studio', 'bedrock-mantle', 'bedrock')]
     [string]$Provider = 'bedrock-mantle',
     [ValidateSet('custom', 'spring-ai-lm-studio', 'spring-ai-bedrock', 'spring-ai-bedrock-mantle')]
-    [string]$Runtime = 'custom',
+    [string]$Runtime = 'spring-ai-bedrock-mantle',
     [string]$Model = '',
     [ValidateSet('', 'low', 'medium', 'high')]
     [string]$ReasoningEffort = 'high',

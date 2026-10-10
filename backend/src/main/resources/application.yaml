@@ -17,8 +17,8 @@ spring:
     enabled: true
   ai:
     model:
-      # Runtime scripts explicitly select openai or bedrock-converse. Default keeps
-      # all Spring AI chat clients inactive while the established runtime is used.
+      # The repository launcher explicitly selects openai for the supported
+      # Spring AI Bedrock Mantle/Gemma runtime or bedrock-converse for Converse.
       chat: ${FINANCE_SPRING_AI_CHAT_MODEL:none}
       embedding: none
       image: none
@@ -26,8 +26,8 @@ spring:
       audio:
         speech: none
         transcription: none
-    # V6 migration foundation. The current custom assistant remains the default path.
-    # Spring AI is opt-in until tool and provider parity are verified.
+    # The repository launcher selects the supported Spring AI runtime. This
+    # fallback preserves a direct-Maven custom-runtime startup without credentials.
     openai:
       # LM Studio uses its server root; Bedrock Mantle supplies its OpenAI-compatible
       # /openai base URL. Spring AI appends /v1/chat/completions for chat requests.

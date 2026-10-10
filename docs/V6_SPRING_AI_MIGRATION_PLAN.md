@@ -1,6 +1,6 @@
 # V6 — Spring AI Integration and Cloud Provider Boundary
 
-**Status:** in progress — Gemma 4 31B provider selected and live-verified
+**Status:** complete — Spring AI Bedrock Mantle/Gemma is the supported launcher runtime
 **Tracking:** GitHub Issue #19
 
 ## Goal
@@ -63,9 +63,9 @@ The runtime selector is a temporary migration seam. It allows parity testing and
    - The first live check reached Bedrock successfully but the configured local identity was denied `bedrock:InvokeModel` for the selected inference profile. This is an IAM policy prerequisite, not an application or credential-chain failure.
    - This native Converse route is deliberately separate from the Mantle/Gemma route because they use different provider protocols and authentication mechanisms. In AWS's current compatibility matrix, Gemma 4 31B and Gemma 4 E2B support Chat Completions and Responses but not Converse; the Mantle route is therefore the correct Spring AI integration path for those models.
 
-5. **Promotion or rollback**
-   - Promote Spring AI only when V4 evaluation prompts, safety checks, and trace/evidence output are at parity.
-   - Keep the custom runtime available behind configuration until the migration is proven stable.
+5. **Promotion or rollback — complete**
+   - Spring AI Bedrock Mantle/Gemma passed the V4 evaluation prompts, safety checks, and trace/evidence checks.
+   - The repository launcher now selects it by default. The custom runtime remains an explicit rollback option behind configuration.
 
 ## Provider decision and live verification
 
@@ -128,8 +128,8 @@ It publishes these eleven operations: monthly summary, category spending, mercha
 
 ## Configuration and privacy
 
-- `finance.assistant.provider` remains the active runtime/provider switch today.
-- Spring AI dependencies are present but its model auto-configuration is disabled by default during the foundation phase.
+- The repository launcher is the supported startup path and selects `bedrock-mantle` + `spring-ai-bedrock-mantle` + `google.gemma-4-31b` by default.
+- The direct Maven configuration keeps its safe custom-runtime fallback so no cloud client starts accidentally without an explicit launcher/session credential.
 - No API key is committed or stored in SQLite.
 - When cloud mode is later enabled, the database and raw statement files remain local. The model receives only a question, selected bounded context, tool definitions, and the individual tool results needed to answer.
 
@@ -157,5 +157,5 @@ Spring AI also requires a non-empty API-key setting even when LM Studio has loca
 - The same public Assistant API works through the Spring AI runtime.
 - Local OpenAI-compatible and Bedrock Converse paths are explicitly configurable.
 - Every existing approved tool has a mapped, read-only Spring AI tool callback.
-- Existing synthetic tests and the V4 real-provider checklist pass with equivalent evidence and trace output.
+- Existing synthetic tests and the V4 real-provider checklist pass with equivalent evidence and trace output. **Complete:** 66 automated tests passed on October 9, 2026; live Gemma checks covered grounded single-tool, multi-tool, clarification, and safe provider-error paths.
 - Provider failure, tool validation, timeout, and privacy behavior remain documented and tested.

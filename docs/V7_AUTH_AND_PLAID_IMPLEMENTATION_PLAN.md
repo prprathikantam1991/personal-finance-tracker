@@ -41,6 +41,61 @@ Before wiring them into finance data, the shared services need a focused securit
 
 These are prerequisites, not cosmetic cleanup. The Finance Tracker must not turn on multi-user access until they are complete.
 
+## How the services secure the Finance Tracker
+
+The three services have deliberately different jobs. The Auth Service proves **who signed in** with Google. The User Service provides the application's stable internal identity. The Finance Tracker validates that identity on every request and uses it to limit every database query to one owner.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Person as Person in browser
+    participant UI as Angular Finance Tracker
+    participant Auth as Auth Service
+    participant Google as Google OAuth
+    participant Users as User Service
+    participant Finance as Finance Tracker API
+    participant DB as Finance database
+
+    Person->>UI: Select Sign in with Google
+    UI->>Auth: Start sign-in
+    Auth->>Google: OAuth authorization request
+    Google-->>Auth: Verified Google identity (subject, email)
+    Auth->>Users: Find or create internal user for Google subject
+    Users-->>Auth: Stable internal user ID
+    Auth-->>UI: Short-lived Finance application credential
+
+    Person->>UI: Open Accounts / ask Assistant / import statement
+    UI->>Finance: Request + Finance application credential
+    Finance->>Finance: Validate signature, issuer, audience, expiry
+    Finance->>Finance: Resolve authenticated owner_user_id
+    Finance->>DB: Query or write WHERE owner_user_id = authenticated owner
+    DB-->>Finance: Only that person's rows
+    Finance-->>UI: Authorized finance result
+```
+
+### Responsibility split
+
+- **Google:** authenticates the human. It is not queried for every finance request.
+- **Auth Service:** completes Google OAuth and issues the Finance Tracker's own short-lived credential/session. It must not pass an unvalidated raw Google ID token through as the application's authorization mechanism.
+- **User Service:** maps the Google subject to a stable internal user ID. That ID is the durable ownership key, not the mutable email address.
+- **Finance Tracker:** acts as a resource server. It validates the application credential locally, extracts the internal user ID, and applies it to every repository/service query.
+- **Finance database:** stores `owner_user_id` alongside each user-owned record. It never determines ownership from a client-supplied query parameter.
+
+### What prevents cross-user access
+
+```mermaid
+flowchart LR
+    R[Request with credential] --> V{Credential valid?}
+    V -- No --> Deny401[Reject: 401 Unauthorized]
+    V -- Yes --> O[Extract owner_user_id]
+    O --> Q[Owner-scoped repository query]
+    Q --> P{Requested row belongs to owner?}
+    P -- No --> Deny403[Reject or return no record]
+    P -- Yes --> Result[Return permitted data]
+```
+
+The frontend does not decide who a user is, and the Finance API does not trust an `ownerUserId` received from the browser. The server derives it only from the validated credential. The same owner boundary applies to imports, accounts, transactions, Assistant conversations, notifications, saved preferences, and future Plaid connections.
+
 ## Target architecture
 
 ```mermaid

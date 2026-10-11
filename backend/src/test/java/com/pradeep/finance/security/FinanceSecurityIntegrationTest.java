@@ -86,6 +86,12 @@ class FinanceSecurityIntegrationTest {
                 .andExpect(jsonPath("$[0].name").value("Owner A Checking"))
                 .andExpect(jsonPath("$[1]").doesNotExist());
 
+        // Account cards are backed by a JDBC projection, so protect that separate query path too.
+        mockMvc.perform(sessionRequest(get("/api/accounts/overview"), ownerASession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Owner A Checking"))
+                .andExpect(jsonPath("$[1]").doesNotExist());
+
         mockMvc.perform(sessionRequest(get("/api/imports/import-b"), ownerASession))
                 .andExpect(status().isNotFound());
         mockMvc.perform(sessionRequest(get("/api/assistant/conversations/conversation-b"), ownerASession))

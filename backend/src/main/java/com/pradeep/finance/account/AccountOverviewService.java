@@ -10,11 +10,16 @@ import java.util.Objects;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @Service
 public class AccountOverviewService {
     private final JdbcTemplate jdbcTemplate;
     public AccountOverviewService(JdbcTemplate jdbcTemplate) { this.jdbcTemplate = jdbcTemplate; }
     public List<AccountOverviewResponse> list() {
+        return listForCurrentOwner(false);
+    }
+    private List<AccountOverviewResponse> listForCurrentOwner(boolean includeArchived) {
         return jdbcTemplate.query("""
                 SELECT a.*, COALESCE(si.credit_limit, a.credit_limit) AS effective_credit_limit, si.statement_balance, si.available_credit,
                 (SELECT x.statement_balance FROM statement_imports x WHERE x.account_id = a.id AND x.id <> si.id ORDER BY COALESCE(x.cycle_end_date, x.imported_at) DESC LIMIT 1) AS previous_statement_balance,
@@ -24,6 +29,7 @@ public class AccountOverviewService {
                 si.interest_earned, si.annual_interest_rate, si.annual_percentage_yield, si.imported_at AS statement_imported_at
                 FROM accounts a LEFT JOIN statement_imports si ON si.id = (
                   SELECT id FROM statement_imports x WHERE x.account_id = a.id ORDER BY COALESCE(x.cycle_end_date, x.imported_at) DESC LIMIT 1)
+                WHERE a.owner_user_id = ? AND (? = 1 OR a.archived = 0)
                 ORDER BY a.institution, a.name
                 """, (rs, row) -> new AccountOverviewResponse(
                 rs.getString("id"), rs.getString("name"), rs.getString("institution"), AccountType.valueOf(rs.getString("account_type")), rs.getString("last_four"), rs.getString("currency"), Instant.parse(rs.getString("created_at")),
@@ -35,10 +41,10 @@ public class AccountOverviewService {
                 rs.getBigDecimal("fees_charged"), rs.getBigDecimal("interest_charged"), rs.getBigDecimal("minimum_payment"),
                 localDate(rs.getString("payment_due_date")), localDate(rs.getString("cycle_start_date")), localDate(rs.getString("cycle_end_date")), nextStatementDate(localDate(rs.getString("cycle_end_date"))),
                 rs.getBigDecimal("beginning_balance"), rs.getBigDecimal("total_credits"), rs.getBigDecimal("total_debits"), rs.getBigDecimal("interest_earned"), rs.getBigDecimal("annual_interest_rate"), rs.getBigDecimal("annual_percentage_yield"),
-                instant(rs.getString("statement_imported_at"))));
+                instant(rs.getString("statement_imported_at"))), FinanceOwnerContext.requireOwnerUserId(), includeArchived ? 1 : 0);
     }
     public AccountHistoryResponse history(String accountId) {
-        AccountOverviewResponse account = list().stream().filter(item -> item.id().equals(accountId)).findFirst()
+        AccountOverviewResponse account = listForCurrentOwner(true).stream().filter(item -> item.id().equals(accountId)).findFirst()
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Account not found."));
         List<StatementSnapshot> snapshots = jdbcTemplate.query("""
                 SELECT cycle_start_date, cycle_end_date, beginning_balance, statement_balance, total_credits, total_debits,

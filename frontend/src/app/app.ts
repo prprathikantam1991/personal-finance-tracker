@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { FinanceAuthService } from './core/finance-auth.service';
@@ -15,6 +15,9 @@ export class App implements OnInit {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
   protected readonly auth = inject(FinanceAuthService);
+  protected readonly canShowProtectedContent = computed(() =>
+    this.auth.statusLoaded() && (!this.auth.authenticationEnabled() || this.auth.authenticated()),
+  );
   protected readonly notificationOpen = signal(false);
   protected readonly reminders = signal<Reminder[]>([]);
 

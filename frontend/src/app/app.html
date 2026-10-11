@@ -3,12 +3,14 @@
     <a class="brand" routerLink="/accounts" aria-label="Finance Tracker home">
       <span class="brand-mark" aria-hidden="true">F</span><span>Finance Tracker</span>
     </a>
-    <nav aria-label="Main navigation">
-      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
-      <a routerLink="/accounts" routerLinkActive="active">Accounts</a>
-      <a routerLink="/imports" routerLinkActive="active">Imports</a>
-      <a routerLink="/transactions" routerLinkActive="active">Transactions</a>
-    </nav>
+    @if (canShowProtectedContent()) {
+      <nav aria-label="Main navigation">
+        <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+        <a routerLink="/accounts" routerLinkActive="active">Accounts</a>
+        <a routerLink="/imports" routerLinkActive="active">Imports</a>
+        <a routerLink="/transactions" routerLinkActive="active">Transactions</a>
+      </nav>
+    }
     <div class="top-actions">
       @if (auth.authenticationEnabled()) {
         @if (auth.authenticated()) {
@@ -23,6 +25,18 @@
       </div>
     </div>
   </header>
-  <main class="page-content"><router-outlet /></main>
-  @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><div class="assistant-launcher-heading"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong></div><textarea #assistantQuestion rows="4" placeholder="Ask about spending, accounts, payments, or trends…" aria-label="Ask Finance AI"></textarea><button type="submit">Ask</button></form> }
+  @if (canShowProtectedContent()) {
+    <main class="page-content"><router-outlet /></main>
+    @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><div class="assistant-launcher-heading"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong></div><textarea #assistantQuestion rows="4" placeholder="Ask about spending, accounts, payments, or trends…" aria-label="Ask Finance AI"></textarea><button type="submit">Ask</button></form> }
+  } @else if (auth.statusLoaded()) {
+    <main class="signed-out-page">
+      <section class="signed-out-card">
+        <span class="signed-out-mark" aria-hidden="true">F</span>
+        <p class="eyebrow">FINANCE TRACKER</p>
+        <h1>You’re signed out</h1>
+        <p>Sign in to view your accounts, transactions, and financial insights.</p>
+        <button type="button" class="session-button primary" (click)="auth.signIn()">Sign in with Google</button>
+      </section>
+    </main>
+  }
 </div>

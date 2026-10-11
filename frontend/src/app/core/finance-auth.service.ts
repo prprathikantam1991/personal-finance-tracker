@@ -6,7 +6,8 @@ interface FinanceSessionStatus { authenticationEnabled: boolean; authenticated: 
 @Injectable({ providedIn: 'root' })
 export class FinanceAuthService {
   readonly authenticationEnabled = signal(false);
-  readonly authenticated = signal(true);
+  readonly authenticated = signal(false);
+  readonly statusLoaded = signal(false);
 
   constructor(private readonly http: HttpClient) {}
 
@@ -15,10 +16,12 @@ export class FinanceAuthService {
       next: status => {
         this.authenticationEnabled.set(status.authenticationEnabled);
         this.authenticated.set(status.authenticated);
+        this.statusLoaded.set(true);
       },
       error: () => {
         this.authenticationEnabled.set(true);
         this.authenticated.set(false);
+        this.statusLoaded.set(true);
       },
     });
   }
@@ -29,9 +32,18 @@ export class FinanceAuthService {
   }
 
   signOut(): void {
+    // Hide protected screens immediately. A subsequent status check will restore
+    // access only if server-side logout did not actually invalidate the session.
+    this.authenticated.set(false);
     this.http.post('http://localhost:8080/api/auth/logout', {}).subscribe({
-      next: () => this.authenticated.set(false),
-      error: () => this.authenticated.set(false),
+      next: () => undefined,
+      error: () => undefined,
     });
+  }
+
+  markUnauthenticated(): void {
+    this.authenticationEnabled.set(true);
+    this.authenticated.set(false);
+    this.statusLoaded.set(true);
   }
 }

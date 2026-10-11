@@ -19,9 +19,11 @@ import org.mockito.InOrder;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pradeep.finance.security.FinanceOwnerContext;
 
 class ConversationServiceTest {
     private static final String CONVERSATION_ID = "conversation-1";
+    private static final String OWNER = "test-owner";
 
     private final AssistantConversationRepository conversations = mock(AssistantConversationRepository.class);
     private final AssistantMessageRepository messages = mock(AssistantMessageRepository.class);
@@ -32,11 +34,15 @@ class ConversationServiceTest {
 
     @BeforeEach
     void setUp() {
+        FinanceOwnerContext.set(OWNER);
         service = new ConversationService(conversations, messages, summaries, objectMapper);
-        conversation = AssistantConversation.create();
+        conversation = AssistantConversation.create(OWNER);
         conversation.initialize();
-        when(conversations.findById(CONVERSATION_ID)).thenReturn(Optional.of(conversation));
+        when(conversations.findByIdAndOwnerUserId(CONVERSATION_ID, OWNER)).thenReturn(Optional.of(conversation));
     }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearOwner() { FinanceOwnerContext.clear(); }
 
     @Test
     void preparesOnlyTheNewestTwelveMessagesAndPersistsTheNewQuestion() {

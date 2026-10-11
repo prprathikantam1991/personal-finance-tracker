@@ -309,31 +309,31 @@ public class StatementImportService {
 
     @Transactional(readOnly = true)
     public ImportReview getReview(String importId) {
-        String[] header = jdbcTemplate.query("SELECT original_filename, status FROM statement_imports WHERE id = ?", resultSet -> resultSet.next() ? new String[]{resultSet.getString(1), resultSet.getString(2)} : null, importId);
+        String[] header = jdbcTemplate.query("SELECT original_filename, status FROM statement_imports WHERE id = ? AND owner_user_id = ?", resultSet -> resultSet.next() ? new String[]{resultSet.getString(1), resultSet.getString(2)} : null, importId, ownerUserId());
         if (header == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Import not found.");
-        List<ReviewTransaction> rows = jdbcTemplate.query("SELECT id, transaction_date, description, amount, balance, status FROM transactions WHERE import_id = ? ORDER BY transaction_date, id", (rs, row) -> new ReviewTransaction(rs.getString(1), java.time.LocalDate.parse(rs.getString(2)), rs.getString(3), rs.getBigDecimal(4), rs.getBigDecimal(5), ImportStatus.valueOf(rs.getString(6))), importId);
+        List<ReviewTransaction> rows = jdbcTemplate.query("SELECT id, transaction_date, description, amount, balance, status FROM transactions WHERE import_id = ? AND owner_user_id = ? ORDER BY transaction_date, id", (rs, row) -> new ReviewTransaction(rs.getString(1), java.time.LocalDate.parse(rs.getString(2)), rs.getString(3), rs.getBigDecimal(4), rs.getBigDecimal(5), ImportStatus.valueOf(rs.getString(6))), importId, ownerUserId());
         return new ImportReview(importId, header[0], ImportStatus.valueOf(header[1]), rows);
     }
 
     @Transactional
     public ReviewTransaction updateReviewTransaction(String importId, String transactionId, ReviewTransactionUpdate update) {
         ensureReviewable(importId);
-        int changed = jdbcTemplate.update("UPDATE transactions SET transaction_date = ?, description = ?, amount = ?, balance = ? WHERE id = ? AND import_id = ?", update.date().toString(), update.description().trim(), update.amount(), update.balance(), transactionId, importId);
+        int changed = jdbcTemplate.update("UPDATE transactions SET transaction_date = ?, description = ?, amount = ?, balance = ? WHERE id = ? AND import_id = ? AND owner_user_id = ?", update.date().toString(), update.description().trim(), update.amount(), update.balance(), transactionId, importId, ownerUserId());
         if (changed == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found.");
-        return jdbcTemplate.queryForObject("SELECT id, transaction_date, description, amount, balance, status FROM transactions WHERE id = ?", (rs, row) -> new ReviewTransaction(rs.getString(1), java.time.LocalDate.parse(rs.getString(2)), rs.getString(3), rs.getBigDecimal(4), rs.getBigDecimal(5), ImportStatus.valueOf(rs.getString(6))), transactionId);
+        return jdbcTemplate.queryForObject("SELECT id, transaction_date, description, amount, balance, status FROM transactions WHERE id = ? AND owner_user_id = ?", (rs, row) -> new ReviewTransaction(rs.getString(1), java.time.LocalDate.parse(rs.getString(2)), rs.getString(3), rs.getBigDecimal(4), rs.getBigDecimal(5), ImportStatus.valueOf(rs.getString(6))), transactionId, ownerUserId());
     }
 
     @Transactional
     public void deleteReviewTransaction(String importId, String transactionId) {
         ensureReviewable(importId);
-        if (jdbcTemplate.update("DELETE FROM transactions WHERE id = ? AND import_id = ?", transactionId, importId) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found.");
+        if (jdbcTemplate.update("DELETE FROM transactions WHERE id = ? AND import_id = ? AND owner_user_id = ?", transactionId, importId, ownerUserId()) == 0) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Transaction not found.");
     }
 
     @Transactional
     public ImportReview confirmImport(String importId) {
         ensureReviewable(importId);
-        jdbcTemplate.update("UPDATE transactions SET status = ? WHERE import_id = ?", ImportStatus.CONFIRMED.name(), importId);
-        jdbcTemplate.update("UPDATE statement_imports SET status = ? WHERE id = ?", ImportStatus.CONFIRMED.name(), importId);
+        jdbcTemplate.update("UPDATE transactions SET status = ? WHERE import_id = ? AND owner_user_id = ?", ImportStatus.CONFIRMED.name(), importId, ownerUserId());
+        jdbcTemplate.update("UPDATE statement_imports SET status = ? WHERE id = ? AND owner_user_id = ?", ImportStatus.CONFIRMED.name(), importId, ownerUserId());
         return getReview(importId);
     }
 
@@ -383,7 +383,7 @@ public class StatementImportService {
     }
 
     private void ensureReviewable(String importId) {
-        String status = jdbcTemplate.query("SELECT status FROM statement_imports WHERE id = ?", rs -> rs.next() ? rs.getString(1) : null, importId);
+        String status = jdbcTemplate.query("SELECT status FROM statement_imports WHERE id = ? AND owner_user_id = ?", rs -> rs.next() ? rs.getString(1) : null, importId, ownerUserId());
         if (status == null) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Import not found.");
         if (ImportStatus.CONFIRMED.name().equals(status)) throw new ResponseStatusException(HttpStatus.CONFLICT, "This import has already been confirmed.");
     }

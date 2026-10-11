@@ -25,9 +25,16 @@ class AssistantConversation {
 
     private String title;
 
+    @Column(name = "owner_user_id", nullable = false, updatable = false)
+    private String ownerUserId;
+
     protected AssistantConversation() { }
 
-    static AssistantConversation create() { return new AssistantConversation(); }
+    static AssistantConversation create(String ownerUserId) {
+        AssistantConversation conversation = new AssistantConversation();
+        conversation.ownerUserId = ownerUserId;
+        return conversation;
+    }
 
     @PrePersist
     void initialize() {
@@ -44,4 +51,5 @@ class AssistantConversation {
     Instant getCreatedAt() { return Instant.parse(createdAt); }
     Instant getLastActiveAt() { return Instant.parse(lastActiveAt); }
     String getTitle() { return title; }
+    String getOwnerUserId() { return ownerUserId; }
 }

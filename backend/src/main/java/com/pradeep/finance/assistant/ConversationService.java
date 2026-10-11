@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pradeep.finance.security.FinanceOwnerContext;
 
 /** Owns local conversation lifecycle and bounded prompt context; the model never owns either. */
 @Service
@@ -38,7 +39,7 @@ public class ConversationService {
 
     @Transactional
     public ConversationResponse create() {
-        AssistantConversation conversation = conversations.save(AssistantConversation.create());
+        AssistantConversation conversation = conversations.save(AssistantConversation.create(ownerUserId()));
         summaries.save(AssistantMemorySummary.create(conversation.getId(), json(ConversationContext.empty())));
         return response(conversation, List.of());
     }
@@ -148,8 +149,10 @@ public class ConversationService {
     }
 
     private AssistantConversation requireConversation(String id) {
-        return conversations.findById(id).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found."));
+        return conversations.findByIdAndOwnerUserId(id, ownerUserId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversation not found."));
     }
+    private String ownerUserId() { return FinanceOwnerContext.requireOwnerUserId(); }
     private String json(Object value) { try { return objectMapper.writeValueAsString(value); } catch (JsonProcessingException exception) { throw new IllegalStateException("Could not save assistant conversation.", exception); } }
     private <T> T read(String value, Class<T> type, T fallback) { if (value == null || value.isBlank()) return fallback; try { return objectMapper.readValue(value, type); } catch (JsonProcessingException exception) { return fallback; } }
     private <T> T read(String value, TypeReference<T> type, T fallback) { if (value == null || value.isBlank()) return fallback; try { return objectMapper.readValue(value, type); } catch (JsonProcessingException exception) { return fallback; } }

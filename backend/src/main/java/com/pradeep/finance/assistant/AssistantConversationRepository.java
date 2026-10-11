@@ -2,4 +2,8 @@ package com.pradeep.finance.assistant;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-public interface AssistantConversationRepository extends JpaRepository<AssistantConversation, String> { }
+import java.util.Optional;
+
+public interface AssistantConversationRepository extends JpaRepository<AssistantConversation, String> {
+    Optional<AssistantConversation> findByIdAndOwnerUserId(String id, String ownerUserId);
+}

@@ -7,8 +7,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AccountRepository extends JpaRepository<Account, String> {
 
-    Optional<Account> findByIdentityKey(String identityKey);
+    Optional<Account> findByOwnerUserIdAndIdentityKey(String ownerUserId, String identityKey);
 
-    List<Account> findAllByOrderByInstitutionAscNameAsc();
+    List<Account> findAllByOwnerUserIdOrderByInstitutionAscNameAsc(String ownerUserId);
 }
-

@@ -60,6 +60,9 @@ server:
   port: 8080
 
 finance:
+  security:
+    # Transitional local owner. V7 Auth Service handoff replaces this with a verified session principal.
+    local-owner-id: ${FINANCE_LOCAL_OWNER_ID:local-owner}
   storage:
     statements-directory: data/statements
   automation:

@@ -14,14 +14,28 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @ExtendWith(MockitoExtension.class)
 class AccountServiceTest {
+
+    private static final String OWNER = "test-owner";
 
     @Mock
     private AccountRepository accountRepository;
 
     @InjectMocks
     private AccountService accountService;
+
+    @org.junit.jupiter.api.BeforeEach
+    void establishOwner() {
+        FinanceOwnerContext.set(OWNER);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void clearOwner() {
+        FinanceOwnerContext.clear();
+    }
 
     @Test
     void asksForConfirmationWhenLastFourDigitsAreUnavailable() {
@@ -36,7 +50,7 @@ class AccountServiceTest {
     @Test
     void createsAccountWhenNoIdentityMatchExists() {
         var request = new AccountIdentificationRequest("Example Bank", AccountType.CHECKING, "1234", null, "usd");
-        when(accountRepository.findByIdentityKey("example bank|1234")).thenReturn(Optional.empty());
+        when(accountRepository.findByOwnerUserIdAndIdentityKey(OWNER, "example bank|1234")).thenReturn(Optional.empty());
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account account = invocation.getArgument(0);
             account.initializePersistenceFields();
@@ -49,14 +63,17 @@ class AccountServiceTest {
         assertThat(response.account().institution()).isEqualTo("example bank");
         assertThat(response.account().lastFour()).isEqualTo("1234");
         assertThat(response.account().currency()).isEqualTo("USD");
+        ArgumentCaptor<Account> accountCaptor = ArgumentCaptor.forClass(Account.class);
+        org.mockito.Mockito.verify(accountRepository).save(accountCaptor.capture());
+        assertThat(accountCaptor.getValue().getOwnerUserId()).isEqualTo(OWNER);
     }
 
     @Test
     void matchesSoleInstitutionAndAccountTypeWhenStatementOmitsLastFour() {
         Account checking = new Account("American Express Checking •3185", "american express", AccountType.CHECKING,
-                "3185", "american express|3185", "USD");
+                "3185", "american express|3185", "USD", OWNER);
         checking.initializePersistenceFields();
-        when(accountRepository.findAllByOrderByInstitutionAscNameAsc()).thenReturn(List.of(checking));
+        when(accountRepository.findAllByOwnerUserIdOrderByInstitutionAscNameAsc(OWNER)).thenReturn(List.of(checking));
 
         var response = accountService.identifySoleAccount("American Express", AccountType.CHECKING);
 
@@ -67,10 +84,10 @@ class AccountServiceTest {
     @Test
     void requestsConfirmationWhenMoreThanOneCompatibleAccountExists() {
         Account first = new Account("American Express Checking •3185", "american express", AccountType.CHECKING,
-                "3185", "american express|3185", "USD");
+                "3185", "american express|3185", "USD", OWNER);
         Account second = new Account("American Express Checking •1234", "american express", AccountType.CHECKING,
-                "1234", "american express|1234", "USD");
-        when(accountRepository.findAllByOrderByInstitutionAscNameAsc()).thenReturn(List.of(first, second));
+                "1234", "american express|1234", "USD", OWNER);
+        when(accountRepository.findAllByOwnerUserIdOrderByInstitutionAscNameAsc(OWNER)).thenReturn(List.of(first, second));
 
         var response = accountService.identifySoleAccount("American Express", AccountType.CHECKING);
 

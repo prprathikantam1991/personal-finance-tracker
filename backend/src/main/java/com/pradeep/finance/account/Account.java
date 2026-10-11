@@ -36,6 +36,9 @@ public class Account {
     @Column(name = "identity_key", unique = true)
     private String identityKey;
 
+    @Column(name = "owner_user_id", nullable = false, updatable = false)
+    private String ownerUserId;
+
     @Column(nullable = false)
     private String currency;
 
@@ -60,13 +63,14 @@ public class Account {
     protected Account() {
     }
 
-    Account(String name, String institution, AccountType accountType, String lastFour, String identityKey, String currency) {
+    Account(String name, String institution, AccountType accountType, String lastFour, String identityKey, String currency, String ownerUserId) {
         this.name = name;
         this.institution = institution;
         this.accountType = accountType;
         this.lastFour = lastFour;
         this.identityKey = identityKey;
         this.currency = currency;
+        this.ownerUserId = ownerUserId;
     }
 
     @PrePersist
@@ -85,6 +89,7 @@ public class Account {
     public AccountType getAccountType() { return accountType; }
     public String getLastFour() { return lastFour; }
     public String getIdentityKey() { return identityKey; }
+    public String getOwnerUserId() { return ownerUserId; }
     public String getCurrency() { return currency; }
     public BigDecimal getCurrentApr() { return currentApr; }
     public BigDecimal getPromotionalApr() { return promotionalApr; }

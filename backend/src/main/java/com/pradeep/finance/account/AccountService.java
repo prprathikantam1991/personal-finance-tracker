@@ -6,6 +6,8 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @Service
 public class AccountService {
 
@@ -17,7 +19,7 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAccounts() {
-        return accountRepository.findAllByOrderByInstitutionAscNameAsc().stream()
+        return accountsForCurrentOwner().stream()
                 .map(AccountResponse::from)
                 .toList();
     }
@@ -36,7 +38,7 @@ public class AccountService {
             );
         }
 
-        return accountRepository.findByIdentityKey(identityKey)
+        return accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), identityKey)
                 .map(account -> new AccountIdentificationResponse(
                         AccountIdentificationResponse.AccountMatchStatus.MATCHED,
                         AccountResponse.from(account),
@@ -48,7 +50,7 @@ public class AccountService {
     @Transactional
     public void captureCardTerms(String accountId, ExtractedCardTerms terms) {
         if (accountId == null || !terms.hasValues()) return;
-        accountRepository.findById(accountId).ifPresent(account -> {
+        accountRepository.findById(accountId).filter(account -> currentOwnerUserId().equals(account.getOwnerUserId())).ifPresent(account -> {
             if (account.getAccountType() == AccountType.CREDIT_CARD) account.captureCardTerms(terms);
         });
     }
@@ -57,11 +59,11 @@ public class AccountService {
     @Transactional
     public AccountIdentificationResponse reconcileBiltToWellsAutograph(String lastFour) {
         String wellsIdentity = buildIdentityKey("wells fargo", normalizeLastFour(lastFour));
-        var existingWells = accountRepository.findByIdentityKey(wellsIdentity);
+        var existingWells = accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), wellsIdentity);
         if (existingWells.isPresent()) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
                 AccountResponse.from(existingWells.get()), "Matched the converted Wells Fargo Autograph account.");
         String biltIdentity = buildIdentityKey("bilt", normalizeLastFour(lastFour));
-        return accountRepository.findByIdentityKey(biltIdentity).map(account -> {
+        return accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), biltIdentity).map(account -> {
             account.rebrand("Wells Fargo Autograph •" + lastFour, "wells fargo", wellsIdentity);
             return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
                     AccountResponse.from(account), "Preserved legacy Bilt history on the converted Wells Fargo Autograph account.");
@@ -71,7 +73,7 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public AccountIdentificationResponse identifyExistingBiltCreditCard() {
-        List<Account> biltCards = accountRepository.findAllByOrderByInstitutionAscNameAsc().stream()
+        List<Account> biltCards = accountsForCurrentOwner().stream()
                 .filter(account -> "bilt".equalsIgnoreCase(account.getInstitution()))
                 .filter(account -> account.getAccountType() == AccountType.CREDIT_CARD).toList();
         if (biltCards.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
@@ -88,7 +90,7 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountIdentificationResponse identifySoleAccount(String institution, AccountType accountType) {
         String normalizedInstitution = normalizeInstitution(institution);
-        List<Account> matches = accountRepository.findAllByOrderByInstitutionAscNameAsc().stream()
+        List<Account> matches = accountsForCurrentOwner().stream()
                 .filter(account -> normalizedInstitution.equalsIgnoreCase(account.getInstitution()))
                 .filter(account -> accountType == account.getAccountType()).toList();
         if (matches.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
@@ -107,7 +109,7 @@ public class AccountService {
                 ? request.suggestedName().trim()
                 : institution + " " + request.accountType().name().toLowerCase(Locale.ROOT).replace('_', ' ') + " •" + lastFour;
         String currency = hasText(request.currency()) ? request.currency().trim().toUpperCase(Locale.ROOT) : "USD";
-        Account account = accountRepository.save(new Account(name, institution, request.accountType(), lastFour, identityKey, currency));
+        Account account = accountRepository.save(new Account(name, institution, request.accountType(), lastFour, identityKey, currency, currentOwnerUserId()));
 
         return new AccountIdentificationResponse(
                 AccountIdentificationResponse.AccountMatchStatus.CREATED,
@@ -130,5 +132,13 @@ public class AccountService {
 
     private boolean hasText(String value) {
         return value != null && !value.isBlank();
+    }
+
+    private String currentOwnerUserId() {
+        return FinanceOwnerContext.requireOwnerUserId();
+    }
+
+    private List<Account> accountsForCurrentOwner() {
+        return accountRepository.findAllByOwnerUserIdOrderByInstitutionAscNameAsc(currentOwnerUserId());
     }
 }

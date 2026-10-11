@@ -1,6 +1,12 @@
 # V7 — Authenticated, Multi-User Finance and Plaid Connections
 
-**Status:** planned — implementation has not started.
+**Status:** in progress. Identity hardening and the Finance Tracker owner-boundary foundation are implemented; authenticated handoff, full owner scoping, and Plaid remain planned.
+
+## Current implementation progress
+
+- **Complete:** Auth Service and User Service identity hardening foundation, including internal User Service authentication, OAuth provisioning safety, session invalidation, CSRF enablement, and identity-log redaction.
+- **In progress:** Finance Tracker owner boundary. The database and Account domain now persist and honor `owner_user_id` under a transitional local owner.
+- **Planned next:** short-lived Auth Service handoff, Finance server-side sessions, owner scoping for all remaining finance repositories and Assistant tools, then Plaid Link and encrypted Item storage.
 
 ## Goal
 

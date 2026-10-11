@@ -2,6 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 
 interface FinanceSessionStatus { authenticationEnabled: boolean; authenticated: boolean; csrfToken: string | null; }
+export interface FinanceUserProfile { name: string | null; email: string | null; picture: string | null; }
 
 @Injectable({ providedIn: 'root' })
 export class FinanceAuthService {
@@ -9,6 +10,7 @@ export class FinanceAuthService {
   readonly authenticated = signal(false);
   readonly statusLoaded = signal(false);
   readonly csrfToken = signal<string | null>(null);
+  readonly profile = signal<FinanceUserProfile | null>(null);
 
   constructor(private readonly http: HttpClient) {}
 
@@ -18,12 +20,15 @@ export class FinanceAuthService {
         this.authenticationEnabled.set(status.authenticationEnabled);
         this.authenticated.set(status.authenticated);
         this.csrfToken.set(status.authenticated ? status.csrfToken : null);
+        if (status.authenticated) this.loadProfile();
+        else this.profile.set(null);
         this.statusLoaded.set(true);
       },
       error: () => {
         this.authenticationEnabled.set(true);
         this.authenticated.set(false);
         this.csrfToken.set(null);
+        this.profile.set(null);
         this.statusLoaded.set(true);
       },
     });
@@ -41,6 +46,7 @@ export class FinanceAuthService {
     const csrfToken = this.csrfToken();
     this.authenticated.set(false);
     this.csrfToken.set(null);
+    this.profile.set(null);
     const options = csrfToken
       ? { headers: new HttpHeaders().set('X-Finance-CSRF', csrfToken) }
       : {};
@@ -54,6 +60,14 @@ export class FinanceAuthService {
     this.authenticationEnabled.set(true);
     this.authenticated.set(false);
     this.csrfToken.set(null);
+    this.profile.set(null);
     this.statusLoaded.set(true);
+  }
+
+  private loadProfile(): void {
+    this.http.get<FinanceUserProfile>('http://localhost:8081/auth/profile', { withCredentials: true }).subscribe({
+      next: profile => this.profile.set(profile),
+      error: () => this.profile.set(null),
+    });
   }
 }

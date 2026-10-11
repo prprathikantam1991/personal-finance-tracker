@@ -154,6 +154,7 @@ The browser may send an account ID, transaction ID, or import ID, but it never s
 - The current local session record lives in the private Finance SQLite store and contains the internal owner UUID, creation time, last-seen time, absolute expiry, and a cryptographically random CSRF token. A production deployment can move this table to Redis or a shared database without changing the browser contract.
 - The browser receives only the random session ID in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. For production, use HTTPS and a narrowly scoped domain/path. Local development may relax `Secure` only in an explicit local profile.
 - The Angular browser client enables `withCredentials` only for Finance Tracker API calls. It never sends an application user ID or bearer token from browser storage. The sign-in control is shown whenever the Finance session is absent or expired.
+- The profile menu reads a separate authenticated Auth Service profile projection containing only display name, email, and optional avatar. It does not receive a Google subject, internal user ID, roles, or Finance session material.
 
 ### Use and renewal
 

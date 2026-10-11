@@ -20,7 +20,21 @@
       }
       @if (auth.authenticationEnabled()) {
         @if (auth.authenticated()) {
-          <button type="button" class="session-button" (click)="signOut()">Sign out</button>
+          <div class="profile-control">
+            <button type="button" class="profile-button" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()" aria-label="Open user menu">
+              @if (auth.profile()?.picture) { <img [src]="auth.profile()?.picture" alt="" /> } @else { <span>{{ userInitials() }}</span> }
+            </button>
+            @if (profileOpen()) {
+              <section class="profile-popover" aria-label="User menu">
+                <div class="profile-summary">
+                  @if (auth.profile()?.picture) { <img [src]="auth.profile()?.picture" alt="" /> } @else { <span class="profile-avatar">{{ userInitials() }}</span> }
+                  <div><strong>{{ auth.profile()?.name || 'Signed-in user' }}</strong><small>{{ auth.profile()?.email || 'Your Finance Tracker session is active' }}</small></div>
+                </div>
+                <p>Your financial data is private to this signed-in profile.</p>
+                <button type="button" class="sign-out-menu" (click)="signOut()">Sign out</button>
+              </section>
+            }
+          </div>
         } @else {
           <button type="button" class="session-button primary" (click)="auth.signIn()">Sign in</button>
         }
@@ -28,8 +42,21 @@
     </div>
   </header>
   @if (canShowProtectedContent()) {
-    <main class="page-content"><router-outlet /></main>
-    @if (!isAssistantPage()) { <form class="assistant-launcher" (submit)="$event.preventDefault(); ask(assistantQuestion)"><div class="assistant-launcher-heading"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong></div><textarea #assistantQuestion rows="4" placeholder="Ask about spending, accounts, payments, or trends…" aria-label="Ask Finance AI"></textarea><button type="submit">Ask</button></form> }
+    <main class="page-content" [class.assistant-open]="assistantOpen()"><router-outlet /></main>
+    @if (!isAssistantPage()) {
+      <section class="assistant-launcher" [class.open]="assistantOpen()" aria-label="Finance AI">
+        <header class="assistant-launcher-heading"><button type="button" class="assistant-toggle" (click)="toggleAssistant()"><span aria-hidden="true">✦</span><strong>Ask Finance AI</strong><small>{{ assistantOpen() ? 'Hide chat' : 'Ask a question' }}</small></button>@if (assistantOpen()) { <button type="button" class="maximize-assistant" (click)="maximizeAssistant()" aria-label="Open full Assistant page" title="Open full Assistant page">⤢</button> }</header>
+        @if (assistantOpen()) {
+          <div class="assistant-widget-body">
+            @if (assistantLoading()) { <p class="assistant-widget-empty">Restoring your conversation…</p> }
+            @else if (!assistantMessages().length) { <p class="assistant-widget-empty">Ask about spending, accounts, payments, or trends.</p> }
+            @else { <div class="assistant-widget-messages" aria-live="polite">@for (message of assistantMessages().slice(-6); track $index) { <article class="assistant-widget-message" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">@if (message.role === 'assistant') { <div [innerHTML]="formatAssistantAnswer(message.text)"></div> } @else { {{ message.text }} }@if (message.toolsUsed?.length) { <small>Data used: {{ toolLabel(message.toolsUsed![0]) }}</small> }</article> }@if (assistantSending()) { <article class="assistant-widget-message assistant pending">Checking your finance data…</article> }</div> }
+            @if (assistantError()) { <p class="assistant-widget-error" role="alert">{{ assistantError() }}</p> }
+          </div>
+          <form class="assistant-widget-composer" (submit)="$event.preventDefault(); askAssistant()"><textarea rows="3" [value]="assistantDraft()" (input)="updateAssistantDraft($event)" (keydown.enter)="submitAssistantWithEnter($event)" placeholder="Ask a finance question…" aria-label="Ask Finance AI"></textarea><div><small>Enter to send · Shift+Enter for a new line</small><button type="submit" [disabled]="assistantLoading() || assistantSending() || !assistantDraft().trim()">{{ assistantSending() ? 'Thinking…' : 'Ask' }}</button></div></form>
+        }
+      </section>
+    }
   } @else if (auth.statusLoaded()) {
     <main class="signed-out-page">
       <section class="signed-out-card">

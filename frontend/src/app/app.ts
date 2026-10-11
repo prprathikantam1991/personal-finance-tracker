@@ -56,9 +56,11 @@ export class App implements OnInit {
   protected closeProfile(): void { this.profileOpen.set(false); }
   protected useAvatarFallback(): void { this.profilePictureFailed.set(true); }
   @HostListener('document:click', ['$event'])
-  protected closeProfileWhenClickingOutside(event: MouseEvent): void {
+  protected closeHeaderPopoversWhenClickingOutside(event: MouseEvent): void {
     const target = event.target;
-    if (this.profileOpen() && target instanceof Element && !target.closest('.profile-control')) this.closeProfile();
+    if (!(target instanceof Element)) return;
+    if (this.profileOpen() && !target.closest('.profile-control')) this.closeProfile();
+    if (this.notificationOpen() && !target.closest('.notification-control')) this.closeNotifications();
   }
   protected signOut(): void {
     this.closeNotifications();
@@ -136,6 +138,7 @@ export class App implements OnInit {
 
   private assistantErrorMessage(status: number, detail?: string): string {
     if (status === 504) return 'The selected AI model is taking longer than expected. Try again in a moment.';
+    if (status === 503 && detail) return detail;
     if (status === 503 || status === 0) return 'The selected AI provider is unavailable. Check its connection and try again.';
     return detail || 'The Assistant could not respond. Please try again.';
   }

@@ -78,22 +78,30 @@ npm start
 
 Open `http://localhost:4200`.
 
-### Local AI Assistant
+### Local AI Assistant alternative
 
 1. Load a tool-capable model in LM Studio.
 2. Start its Developer server, normally at `http://localhost:1234`.
 3. Start the backend and frontend.
 4. Open `/assistant` and ask a question.
 
-The default model connection can be overridden with `LM_STUDIO_BASE_URL`, `LM_STUDIO_MODEL`, and `LM_STUDIO_API_KEY`. Do not put keys in source code.
+Use `FINANCE_ASSISTANT_PROVIDER=lm-studio`, `FINANCE_ASSISTANT_RUNTIME=spring-ai-lm-studio`, `LM_STUDIO_BASE_URL`, `FINANCE_ASSISTANT_MODEL`, and `LM_STUDIO_API_KEY` to opt into local inference. Do not put keys in source code.
 
 ### Amazon Bedrock Assistant
 
 The supported cloud assistant path uses Spring AI with Google Gemma 4 31B through Bedrock Mantle. It sends only the question, bounded conversation context, approved tool definitions, and the compact tool results needed for an answer—not the SQLite database or raw statements.
 
+Save the API token once for your Windows user, then open a new PowerShell window:
+
 ```powershell
-$env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-mantle-api-key"
-./scripts/start-backend.ps1
+[Environment]::SetEnvironmentVariable("AWS_BEARER_TOKEN_BEDROCK", "your-bedrock-mantle-api-key", "User")
+```
+
+After that, normal startup uses Bedrock Mantle by default:
+
+```powershell
+cd backend
+mvn spring-boot:run
 ```
 
 Gemma uses Mantle's OpenAI-compatible Chat Completions route, not Bedrock Converse. The bearer token is session-only and is never stored in source control, SQLite, or application configuration. Native Bedrock Converse remains available as an alternative for compatible models such as Claude Haiku.
@@ -111,7 +119,7 @@ $env:AWS_BEARER_TOKEN_BEDROCK = "your-bedrock-api-key"
 ./scripts/start-backend.ps1
 ```
 
-The defaults start the supported Spring AI Bedrock Mantle path with `google.gemma-4-31b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. To preview the effective configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. The earlier custom runtime remains available only as an explicit rollback: `./scripts/start-backend.ps1 -Runtime custom`.
+The supported default is Spring AI + Bedrock Mantle with `google.gemma-4-31b`, high reasoning effort, a 600-token tool-selection allowance, and a 1200-token final-answer allowance. Once `AWS_BEARER_TOKEN_BEDROCK` (or `BEDROCK_API_KEY`) is stored in your Windows user environment and a new PowerShell window is opened, ordinary `mvn spring-boot:run` uses that path too. Without a token, the tracker still starts and the Assistant explains the one-time setup rather than failing the entire application. To preview the launcher configuration without starting the server, use `./scripts/start-backend.ps1 -DryRun`. The earlier custom runtime remains available only as an explicit rollback: `./scripts/start-backend.ps1 -Runtime custom`.
 
 ### Spring AI LM Studio alternative
 

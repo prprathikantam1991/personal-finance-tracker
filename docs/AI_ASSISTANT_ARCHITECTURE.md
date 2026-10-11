@@ -1,6 +1,6 @@
 # Personal Finance Tracker — V3 AI Assistant Architecture
 
-**Status:** V3/V4/V9 delivered; LM Studio default plus opt-in Amazon Bedrock adapters
+**Status:** V3/V4/V9 delivered; Spring AI + Amazon Bedrock Mantle/Gemma is the supported default, with local LM Studio and Bedrock Converse alternatives
 **Primary implementation:** `backend/`  
 **User interface:** `frontend/`  
 **Data policy:** local-first and read-only in V3
@@ -329,28 +329,24 @@ Content-Type: application/json
 
 ## 13. Model provider configuration
 
-The default development configuration is in `application.yaml`:
+The supported default development configuration is Spring AI against Bedrock Mantle:
 
 ```yaml
 finance:
   assistant:
-    provider: ${FINANCE_ASSISTANT_PROVIDER:lm-studio}
-    model: ${FINANCE_ASSISTANT_MODEL:gemma-4-e2b-it-qat}
-    lm-studio:
-      base-url: ${LM_STUDIO_BASE_URL:http://localhost:1234/v1}
-      api-key: ${LM_STUDIO_API_KEY:}
+    provider: ${FINANCE_ASSISTANT_PROVIDER:bedrock-mantle}
+    runtime: ${FINANCE_ASSISTANT_RUNTIME:spring-ai-bedrock-mantle}
+    model: ${FINANCE_ASSISTANT_MODEL:google.gemma-4-31b}
 ```
 
 ### Startup checklist
 
-1. Open LM Studio.
-2. Load a tool-capable local instruction model.
-3. In the **Developer** tab, start the local server.
-4. Confirm `GET http://localhost:1234/v1/models` returns the loaded model.
-5. Start Spring Boot on port 8080.
-6. Open `/assistant` in the Angular application.
+1. Save `AWS_BEARER_TOKEN_BEDROCK` (or `BEDROCK_API_KEY`) in the Windows user environment.
+2. Open a new PowerShell window so it receives the saved token.
+3. Start Spring Boot normally on port 8080.
+4. Open the Assistant from the Angular application.
 
-LM Studio normally does not require a key for a server bound to `localhost`. If LM Studio authentication is enabled, provide `LM_STUDIO_API_KEY` as an environment variable; never commit the token to `application.yaml`, source files, or Git.
+If the token is missing, the application still starts; the Assistant returns a clear setup message instead of preventing finance views from loading. LM Studio remains an explicit local alternative through `FINANCE_ASSISTANT_PROVIDER=lm-studio` and `FINANCE_ASSISTANT_RUNTIME=spring-ai-lm-studio`.
 
 ### Bedrock Runtime adapter
 
@@ -380,7 +376,7 @@ Controls in V3:
 - Only named methods in `LocalAssistantService.execute()` may run.
 - Tool methods are read-only and use existing application business rules.
 - The Angular UI labels the tools used for each response.
-- LM Studio is configured locally by default; no finance data is sent to a cloud provider.
+- Bedrock Mantle/Gemma is the default provider; only the user question, bounded context, allowed tool definitions, and compact tool results cross the cloud boundary. LM Studio remains available for fully local inference.
 - API keys, if enabled, are environment configuration—not code or Git history.
 
 Remaining considerations for later versions:

@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CurrencyPipe, DatePipe, TitleCasePipe } from '@angular/common';
 import { AccountsApiService } from '../core/accounts-api.service';
 import { Account } from '../core/account';
@@ -13,6 +13,8 @@ import { ActivatedRoute } from '@angular/router';
   styleUrl: './transactions-page.scss',
 })
 export class TransactionsPage implements OnInit {
+  private static readonly PAGE_SIZE = 50;
+  protected readonly Math = Math;
   private readonly accountsApi = inject(AccountsApiService);
   private readonly transactionsApi = inject(TransactionsApiService);
   private readonly route = inject(ActivatedRoute);
@@ -26,6 +28,7 @@ export class TransactionsPage implements OnInit {
   protected readonly search = signal('');
   protected readonly selectedCategory = signal('');
   protected readonly selectedConfidence = signal('');
+  protected readonly page = signal(1);
   protected readonly categoryMessage = signal('');
   protected readonly editingCategoryId = signal<string | null>(null);
   protected readonly selectedTransactionIds = signal<Set<string>>(new Set());
@@ -44,7 +47,7 @@ export class TransactionsPage implements OnInit {
     this.loading.set(true);
     this.loadError.set(false);
     this.transactionsApi.list(this.selectedAccountId(), this.fromDate(), this.toDate()).subscribe({
-      next: (transactions) => { this.transactions.set(transactions); this.selectedTransactionIds.set(new Set()); this.loading.set(false); },
+      next: (transactions) => { this.transactions.set(transactions); this.selectedTransactionIds.set(new Set()); this.page.set(1); this.loading.set(false); },
       error: () => { this.loadError.set(true); this.loading.set(false); },
     });
   }
@@ -52,10 +55,10 @@ export class TransactionsPage implements OnInit {
   protected updateAccount(event: Event): void { this.selectedAccountId.set((event.target as HTMLSelectElement).value); this.loadTransactions(); }
   protected updateFrom(event: Event): void { this.fromDate.set((event.target as HTMLInputElement).value); this.loadTransactions(); }
   protected updateTo(event: Event): void { this.toDate.set((event.target as HTMLInputElement).value); this.loadTransactions(); }
-  protected updateSearch(event: Event): void { this.search.set((event.target as HTMLInputElement).value.toLowerCase()); }
-  protected updateCategory(event: Event): void { this.selectedCategory.set((event.target as HTMLSelectElement).value); }
-  protected updateConfidence(event: Event): void { this.selectedConfidence.set((event.target as HTMLSelectElement).value); }
-  protected clearFilters(): void { this.selectedAccountId.set(''); this.fromDate.set(''); this.toDate.set(''); this.search.set(''); this.selectedCategory.set(''); this.selectedConfidence.set(''); this.loadTransactions(); }
+  protected updateSearch(event: Event): void { this.search.set((event.target as HTMLInputElement).value.toLowerCase()); this.page.set(1); }
+  protected updateCategory(event: Event): void { this.selectedCategory.set((event.target as HTMLSelectElement).value); this.page.set(1); }
+  protected updateConfidence(event: Event): void { this.selectedConfidence.set((event.target as HTMLSelectElement).value); this.page.set(1); }
+  protected clearFilters(): void { this.selectedAccountId.set(''); this.fromDate.set(''); this.toDate.set(''); this.search.set(''); this.selectedCategory.set(''); this.selectedConfidence.set(''); this.page.set(1); this.loadTransactions(); }
   protected categories(): string[] { return [...new Set(this.transactions().map(transaction => transaction.category))].sort(); }
   protected saveCategory(transaction: FinanceTransaction, category: string, rememberForFuture: boolean): void {
     this.categoryMessage.set('');
@@ -95,8 +98,15 @@ export class TransactionsPage implements OnInit {
       }, error: () => this.categoryMessage.set('Could not update the selected transactions. Please try again.'),
     });
   }
-  protected visibleTransactions(): FinanceTransaction[] {
+  protected readonly filteredTransactions = computed(() => {
     const search = this.search();
     return this.transactions().filter((transaction) => (!search || `${transaction.merchantName} ${transaction.description} ${transaction.accountName ?? ''}`.toLowerCase().includes(search)) && (!this.selectedCategory() || transaction.category === this.selectedCategory()) && (!this.selectedConfidence() || transaction.categorizationConfidence === this.selectedConfidence()));
+  });
+  protected visibleTransactions(): FinanceTransaction[] {
+    const start = (this.page() - 1) * TransactionsPage.PAGE_SIZE;
+    return this.filteredTransactions().slice(start, start + TransactionsPage.PAGE_SIZE);
   }
+  protected pageCount(): number { return Math.max(1, Math.ceil(this.filteredTransactions().length / TransactionsPage.PAGE_SIZE)); }
+  protected previousPage(): void { this.page.update(page => Math.max(1, page - 1)); }
+  protected nextPage(): void { this.page.update(page => Math.min(this.pageCount(), page + 1)); }
 }

@@ -5,6 +5,8 @@ import { Router } from '@angular/router';
 
 @Component({ selector: 'app-imports-page', imports: [DatePipe, DecimalPipe], templateUrl: './imports-page.html', styleUrl: './imports-page.scss' })
 export class ImportsPage implements OnInit {
+  private static readonly PAGE_SIZE = 50;
+  protected readonly Math = Math;
   private readonly importsApi = inject(ImportsApiService);
   private readonly router = inject(Router);
   protected readonly selectedFile = signal<File | null>(null);
@@ -13,6 +15,7 @@ export class ImportsPage implements OnInit {
   protected readonly result = signal<ImportResult | null>(null);
   protected readonly history = signal<ImportHistoryItem[]>([]);
   protected readonly historyStatus = signal<'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED' | 'NEEDS_ATTENTION'>('ALL');
+  protected readonly historyPage = signal(1);
   protected readonly incoming = signal<IncomingStatementItem[]>([]);
   protected readonly importRows = computed<ImportListRow[]>(() => [
     ...this.history().map(item => ({ kind: 'IMPORTED' as const, item })),
@@ -23,6 +26,10 @@ export class ImportsPage implements OnInit {
     : this.importRows().filter(row => row.kind === 'INCOMING'
       ? this.historyStatus() === 'NEEDS_ATTENTION'
       : row.item.status === this.historyStatus()));
+  protected readonly pagedHistory = computed(() => {
+    const start = (this.historyPage() - 1) * ImportsPage.PAGE_SIZE;
+    return this.filteredHistory().slice(start, start + ImportsPage.PAGE_SIZE);
+  });
   protected readonly historyError = signal<string | null>(null);
   protected readonly uploadDialogOpen = signal(false);
   protected readonly coverage = signal<StatementCoverage | null>(null);
@@ -64,16 +71,20 @@ export class ImportsPage implements OnInit {
   }
   protected selectHistoryStatus(event: Event): void {
     this.historyStatus.set((event.target as HTMLSelectElement).value as 'ALL' | 'REVIEW_REQUIRED' | 'CONFIRMED' | 'NEEDS_ATTENTION');
+    this.historyPage.set(1);
   }
+  protected historyPageCount(): number { return Math.max(1, Math.ceil(this.filteredHistory().length / ImportsPage.PAGE_SIZE)); }
+  protected previousHistoryPage(): void { this.historyPage.update(page => Math.max(1, page - 1)); }
+  protected nextHistoryPage(): void { this.historyPage.update(page => Math.min(this.historyPageCount(), page + 1)); }
 
   private loadHistory(): void {
     this.importsApi.history().subscribe({
-      next: history => this.history.set(history),
+      next: history => { this.history.set(history); this.historyPage.set(1); },
       error: () => this.historyError.set('Import history is temporarily unavailable.'),
     });
   }
   private loadIncoming(): void {
-    this.importsApi.incoming().subscribe({ next: incoming => this.incoming.set(incoming) });
+    this.importsApi.incoming().subscribe({ next: incoming => { this.incoming.set(incoming); this.historyPage.set(1); } });
   }
   protected rowDate(row: ImportListRow): string { return row.kind === 'IMPORTED' ? row.item.importedAt : row.item.modifiedAt; }
 

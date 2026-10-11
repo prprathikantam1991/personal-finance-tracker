@@ -37,7 +37,8 @@ public class FinanceOwnerFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return uri.startsWith("/actuator/") || uri.equals("/api/health") || uri.equals("/api/auth/handoff/callback");
+        return uri.startsWith("/actuator/") || uri.equals("/api/health") || uri.equals("/api/auth/handoff/callback")
+                || uri.equals("/api/auth/session");
     }
 
     @Override

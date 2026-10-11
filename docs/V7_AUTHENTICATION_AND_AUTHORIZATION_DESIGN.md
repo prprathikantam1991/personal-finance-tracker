@@ -1,6 +1,6 @@
 # V7 — Finance Tracker Authentication, Authorization, and Session Design
 
-**Status:** in progress. The owner-boundary foundation, one-time Auth Service handoff, and Finance server-side session foundation are implemented. Browser sign-in/out UI, CSRF enforcement, and production-grade signed service assertions remain.
+**Status:** in progress. The owner-boundary foundation, one-time Auth Service handoff, Finance server-side session foundation, and browser sign-in/sign-out foundation are implemented. CSRF enforcement and production-grade signed service assertions remain.
 
 ## Purpose
 
@@ -154,6 +154,7 @@ The browser may send an account ID, transaction ID, or import ID, but it never s
 - Finance Tracker creates a cryptographically random opaque session ID only after validating the one-time Auth Service handoff.
 - The session record lives in a private session store such as Redis and contains the internal owner UUID, issued time, absolute expiry, idle timeout, CSRF state, granted scopes, and optional upstream `sid`.
 - The browser receives only the random session ID in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. For production, use HTTPS and a narrowly scoped domain/path. Local development may relax `Secure` only in an explicit local profile.
+- The Angular browser client enables `withCredentials` only for Finance Tracker API calls. It never sends an application user ID or bearer token from browser storage. When `FINANCE_AUTH_ENABLED=false` (the default during migration), the existing local-only owner remains active and the sign-in control stays hidden.
 
 ### Use and renewal
 

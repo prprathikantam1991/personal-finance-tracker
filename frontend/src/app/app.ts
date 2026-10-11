@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { FinanceAuthService } from './core/finance-auth.service';
 
 interface Reminder { id: string; accountId: string; accountName: string; title: string; detail: string; date: string; severity: 'OVERDUE' | 'URGENT' | 'UPCOMING' | 'PLANNED'; }
 
@@ -13,10 +14,12 @@ interface Reminder { id: string; accountId: string; accountName: string; title: 
 export class App implements OnInit {
   private readonly router = inject(Router);
   private readonly http = inject(HttpClient);
+  protected readonly auth = inject(FinanceAuthService);
   protected readonly notificationOpen = signal(false);
   protected readonly reminders = signal<Reminder[]>([]);
 
   ngOnInit(): void {
+    this.auth.loadStatus();
     this.http.get<Reminder[]>('http://localhost:8080/api/reminders').subscribe({ next: reminders => this.reminders.set(reminders), error: () => this.reminders.set([]) });
   }
 

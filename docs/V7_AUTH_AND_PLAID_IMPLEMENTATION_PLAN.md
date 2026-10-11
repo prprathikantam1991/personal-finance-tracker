@@ -209,9 +209,61 @@ Plaid's `/transactions/sync` cursor is the preferred incremental sync mechanism.
 - Treat reauthentication (`ITEM_LOGIN_REQUIRED` or equivalent) as a user-visible action, never as a silent retry loop.
 - Apply rate limits and audit events to Link creation, token exchange, sync, and disconnect endpoints.
 
-## Delivery sequence
+## Implementation work breakdown
 
-### Phase A — identity contract and tracker isolation
+The following is the implementation checklist for V7. It is deliberately ordered: no Plaid production connection is built until the preceding identity and isolation work is accepted.
+
+### 1. Harden the shared identity services
+
+- Protect every User Service API with authenticated service-to-service access; no public `/api/**` user endpoints.
+- Remove diagnostic file writes and any logging of Google subject IDs, email addresses, roles, credentials, or raw errors containing identity details.
+- Require successful User Service provisioning/lookup before completing an Auth Service login or issuing a Finance credential.
+- Make first-login user creation concurrency-safe with a database-backed upsert or a unique-constraint recovery/re-read flow.
+- Invalidate both the browser credential and server-side Redis/Spring session at logout.
+- Define a single documented Finance credential/session expiry and refresh policy.
+- Protect cookie-authenticated browser mutations with an explicit CSRF approach.
+- Replace broad user payloads with a minimal internal identity DTO.
+- Add tests for provisioning failure, concurrent first login, logout invalidation, email changes, session expiry, and User Service timeouts.
+
+### 2. Establish the Auth Service to Finance Tracker contract
+
+- Have Auth Service mint a short-lived application credential after successful Google authentication.
+- Include a stable internal user ID, issuer, audience, expiry, and only the scopes Finance Tracker needs.
+- Publish the validation key/JWKS or use a deliberately designed secure session-validation path.
+- Configure Finance Tracker as a resource server that validates the credential before controller logic runs.
+- Never use a raw Google ID token or browser-supplied `ownerUserId` as the authorization contract.
+- Add Angular sign-in, sign-out, expired-session, unauthenticated, and loading states.
+
+### 3. Isolate every Finance Tracker record by owner
+
+- Add `owner_user_id` ownership to accounts, snapshots, transactions, imports, category mappings, watched-folder settings, notifications, recurring state, Assistant conversations/messages, and future preferences/Plaid data.
+- Backfill the existing local ledger to the first authenticated user's stable internal ID, verify totals and counts, then make ownership required.
+- Pass `ownerUserId` explicitly through repositories and services; enforce it in data queries and mutations rather than only in Angular or controllers.
+- Scope all Assistant tools and conversation retrieval to the authenticated owner.
+- Prove through integration tests that user A cannot read, create, update, import into, or query through the Assistant any user B data.
+
+### 4. Build Plaid against Sandbox
+
+- Create a Plaid Trial team and use Sandbox credentials first.
+- Create authenticated, owner-scoped Link-token and public-token exchange endpoints.
+- Exchange the public token only in Finance Tracker; the browser never sees a Plaid access token.
+- Encrypt persisted Plaid access tokens and store Item/account identifiers and sync state against the owner.
+- Normalize Plaid accounts, balances, pending/posted transactions, and source IDs into the existing ledger model.
+- Record provenance as `PLAID` or `STATEMENT`; conservatively deduplicate cross-source records and route uncertain matches for review.
+- Implement manual sync, visible last-sync status, safe errors, reauthorization handling, and explicit disconnect.
+- Test idempotent sync, expired consent, invalid credentials, duplicate events, and redacted logging.
+
+### 5. Roll out real connections carefully
+
+- Enable production Link only after the identity, isolation, and Sandbox acceptance checks pass.
+- Connect one institution at a time and reconcile imported balances/transactions against saved statements.
+- Keep PDF/CSV and watched-folder statement imports available without Plaid.
+- Add operational audit events, endpoint rate limits, secret-management setup, and user-facing consent/disconnect documentation.
+- Decide whether scheduled sync is useful only after manual sync, error recovery, and duplicate behavior are proven.
+
+### Delivery sequence
+
+#### Phase A — identity contract and tracker isolation
 
 1. Document the Auth Service → Finance Tracker credential contract and run a security review of both shared services.
 2. Add Finance Tracker authentication middleware/resource-server validation.
@@ -220,14 +272,14 @@ Plaid's `/transactions/sync` cursor is the preferred incremental sync mechanism.
 5. Add Angular sign-in/out and unauthenticated/loading states.
 6. Prove isolation with integration tests: user A cannot enumerate, read, update, import into, or ask the Assistant about user B's records.
 
-### Phase B — Plaid sandbox
+#### Phase B — Plaid sandbox
 
 1. Create a Plaid Trial team and develop against Sandbox first.
 2. Implement owner-scoped Link-token creation, public-token exchange, encrypted Item storage, and explicit disconnect.
 3. Import Sandbox accounts/transactions into a dedicated test owner and validate idempotent sync.
 4. Exercise expired consent, invalid credentials, duplicate events, and safe log handling.
 
-### Phase C — controlled real connections
+#### Phase C — controlled real connections
 
 1. Enable real Link only after Phase A/B acceptance criteria pass.
 2. Connect one institution at a time and compare normalized results against existing statement imports.

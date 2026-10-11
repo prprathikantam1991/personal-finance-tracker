@@ -61,8 +61,18 @@ server:
 
 finance:
   security:
-    # Transitional local owner. V7 Auth Service handoff replaces this with a verified session principal.
+    # Disabled by default during the transition; enable only after the Auth and User services are running.
+    authentication-enabled: ${FINANCE_AUTH_ENABLED:false}
+    # Transitional local owner used only while authentication-enabled is false.
     local-owner-id: ${FINANCE_LOCAL_OWNER_ID:local-owner}
+    session:
+      cookie-name: finance_session
+      cookie-secure: ${FINANCE_SESSION_COOKIE_SECURE:false}
+      max-age: ${FINANCE_SESSION_MAX_AGE:PT8H}
+    handoff:
+      auth-service-url: ${AUTH_SERVICE_URL:http://localhost:8081}
+      service-key: ${FINANCE_HANDOFF_SERVICE_KEY:}
+      allowed-return-url: ${FINANCE_AUTH_RETURN_URL:http://localhost:4200/dashboard}
   storage:
     statements-directory: data/statements
   automation:

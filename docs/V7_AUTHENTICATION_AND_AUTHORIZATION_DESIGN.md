@@ -1,6 +1,6 @@
 # V7 — Finance Tracker Authentication, Authorization, and Session Design
 
-**Status:** in progress. The owner-boundary foundation is implemented; Auth Service handoff and browser sessions remain to be completed.
+**Status:** in progress. The owner-boundary foundation, one-time Auth Service handoff, and Finance server-side session foundation are implemented. Browser sign-in/out UI, CSRF enforcement, and production-grade signed service assertions remain.
 
 ## Purpose
 
@@ -45,7 +45,7 @@ When the first verified Finance session is created, a transactionally guarded bo
 
 V7 uses a backend-for-frontend style session boundary for the browser. The browser holds only an opaque, HttpOnly session cookie. It does **not** store a Google ID token, Finance access token, Plaid secret, or user ID in `localStorage`.
 
-The Auth Service still uses Google OpenID Connect for login. After it maps the Google identity to the internal User Service ID, it performs a short-lived one-time handoff to Finance Tracker. Finance Tracker validates the handoff over a trusted backend channel, creates its own server-side session, and sets an opaque Finance cookie.
+The Auth Service still uses Google OpenID Connect for login. After it maps the Google identity to the internal User Service ID, it issues a short-lived, single-use handoff code. Finance Tracker exchanges that code on its backend channel using a service credential, creates its own server-side session, and sets an opaque Finance cookie.
 
 ```mermaid
 flowchart LR
@@ -54,7 +54,7 @@ flowchart LR
     Auth <--> Google[Google OpenID Connect]
     Auth --> Users[User Service]
     Users --> Auth
-    Auth -->|one-time signed handoff| Finance[Finance Tracker API]
+    Auth -->|one-time handoff code + backend exchange| Finance[Finance Tracker API]
     Finance --> Sessions[(Finance session store)]
     Finance --> Ledger[(Owner-scoped finance ledger)]
     UI -->|HttpOnly finance_session cookie| Finance
@@ -88,13 +88,17 @@ sequenceDiagram
     A-->>B: Redirect with one-time, short-lived handoff code
     B->>F: Finance callback with handoff code
     F->>A: Back-channel code exchange with service credential
-    A-->>F: Signed Finance assertion: owner UUID, issuer, audience, expiry, scopes
-    F->>F: Validate signature, issuer, audience, expiry, and replay ID
+    A-->>F: Owner UUID after authenticated single-use code exchange
+    F->>F: Validate service credential, expiry, and single-use handoff
     F->>S: Create Finance session for owner UUID
     F-->>B: Set HttpOnly, Secure, SameSite finance_session cookie
 ```
 
-### Required credential claims
+### Current local handoff and production assertion target
+
+The current local development implementation deliberately uses a single-use code (two-minute lifetime, consumed on exchange) plus a shared service credential in the Auth Service → Finance Tracker backend call. The browser receives only the code, never the internal owner ID or service credential. This is appropriate for the local three-service development environment, but it is not the final production transport security model: production must use HTTPS and either mutually authenticated service communication or a signed assertion validated against an Auth Service key set.
+
+The following are the required claims for that production signed assertion:
 
 The Auth Service to Finance Tracker assertion must contain only the identity/authorization information Finance Tracker needs:
 

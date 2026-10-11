@@ -26,6 +26,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @Service
 public class StatementImportService {
     private static final Pattern INSTITUTION = Pattern.compile("(?im)^(?:institution|bank|financial institution)\\s*:\\s*([^\\r\\n,]+)");
@@ -84,8 +86,8 @@ public class StatementImportService {
         java.util.Map<String, String> accountIdsBySourceLastFour = biltAccountIds(text);
         captureCardTerms(text, accountIdentification);
         StatementSummary statementSummary = extractStatementSummary(text);
-        String existingImportId = jdbcTemplate.query("SELECT id FROM statement_imports WHERE source_hash = ? LIMIT 1",
-                resultSet -> resultSet.next() ? resultSet.getString(1) : null, sourceHash);
+        String existingImportId = jdbcTemplate.query("SELECT id FROM statement_imports WHERE owner_user_id = ? AND source_hash = ? LIMIT 1",
+                resultSet -> resultSet.next() ? resultSet.getString(1) : null, ownerUserId(), sourceHash);
         if (existingImportId != null) {
             refreshStatementSummary(existingImportId, statementSummary);
             String accountId = accountIdentification.account() == null ? null : accountIdentification.account().id();
@@ -107,12 +109,12 @@ public class StatementImportService {
         jdbcTemplate.update("""
                 INSERT INTO statement_imports (id, account_id, original_filename, stored_filename, source_type, import_source, status, imported_at, source_hash,
                 statement_balance, credit_limit, available_credit, fees_charged, interest_charged, minimum_payment, payment_due_date, cycle_start_date, cycle_end_date,
-                beginning_balance, total_credits, total_debits, interest_earned, annual_interest_rate, annual_percentage_yield)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                beginning_balance, total_credits, total_debits, interest_earned, annual_interest_rate, annual_percentage_yield, owner_user_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, importId, accountId, originalFilename, storedFilename, sourceType(originalFilename), importSource.name(), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString(), sourceHash,
                 statementSummary.statementBalance(), statementSummary.creditLimit(), statementSummary.availableCredit(), statementSummary.feesCharged(), statementSummary.interestCharged(), statementSummary.minimumPayment(),
                 dateString(statementSummary.paymentDueDate()), dateString(statementSummary.cycleStartDate()), dateString(statementSummary.cycleEndDate()),
-                statementSummary.beginningBalance(), statementSummary.totalCredits(), statementSummary.totalDebits(), statementSummary.interestEarned(), statementSummary.annualInterestRate(), statementSummary.annualPercentageYield());
+                statementSummary.beginningBalance(), statementSummary.totalCredits(), statementSummary.totalDebits(), statementSummary.interestEarned(), statementSummary.annualInterestRate(), statementSummary.annualPercentageYield(), ownerUserId());
         int duplicatesSkipped = 0;
         for (ParsedTransaction transaction : transactions) {
             String transactionAccountId = accountIdsBySourceLastFour.getOrDefault(transaction.sourceAccountLastFour(), accountId);
@@ -120,8 +122,8 @@ public class StatementImportService {
                 duplicatesSkipped++;
                 continue;
             }
-            jdbcTemplate.update("INSERT INTO transactions (id, import_id, account_id, transaction_date, description, amount, balance, category, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    UUID.randomUUID().toString(), importId, transactionAccountId, transaction.date().toString(), transaction.description(), transaction.amount(), transaction.balance(), transactionCategorizer.categorize(transaction.description()), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString());
+            jdbcTemplate.update("INSERT INTO transactions (id, import_id, account_id, transaction_date, description, amount, balance, category, status, created_at, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    UUID.randomUUID().toString(), importId, transactionAccountId, transaction.date().toString(), transaction.description(), transaction.amount(), transaction.balance(), transactionCategorizer.categorize(transaction.description()), ImportStatus.REVIEW_REQUIRED.name(), importedAt.toString(), ownerUserId());
         }
         transferDetectionService.detectTransfers();
 
@@ -144,13 +146,14 @@ public class StatementImportService {
                 FROM statement_imports si
                 LEFT JOIN accounts a ON a.id = si.account_id
                 LEFT JOIN transactions t ON t.import_id = si.id
+                WHERE si.owner_user_id = ?
                 GROUP BY si.id, si.original_filename, si.import_source, si.status, a.name, si.imported_at
                 ORDER BY si.imported_at DESC
                 LIMIT 50
                 """, (rs, row) -> new ImportHistoryItem(
                 rs.getString("id"), rs.getString("original_filename"),
                 ImportSource.valueOf(rs.getString("import_source")), ImportStatus.valueOf(rs.getString("status")),
-                rs.getString("name"), rs.getInt("transaction_count"), Instant.parse(rs.getString("imported_at"))));
+                rs.getString("name"), rs.getInt("transaction_count"), Instant.parse(rs.getString("imported_at"))), ownerUserId());
     }
 
     /**
@@ -173,12 +176,13 @@ public class StatementImportService {
                                 substr(si.imported_at, 1, 10)) AS statement_date
                 FROM accounts a
                 LEFT JOIN statement_imports si ON si.account_id = a.id
+                WHERE a.owner_user_id = ?
                 ORDER BY a.institution, a.name, statement_date
                 """, (rs, row) -> new CoverageImport(
                 rs.getString("account_id"), rs.getString("account_name"), rs.getString("institution"),
                 rs.getString("account_type"), rs.getString("last_four"), rs.getString("import_id"),
                 rs.getString("original_filename"), rs.getString("status"),
-                rs.getString("statement_date") == null ? null : LocalDate.parse(rs.getString("statement_date"))));
+                rs.getString("statement_date") == null ? null : LocalDate.parse(rs.getString("statement_date"))), ownerUserId());
 
         java.util.Map<String, List<CoverageImport>> byAccount = new java.util.LinkedHashMap<>();
         for (CoverageImport item : imports) byAccount.computeIfAbsent(item.accountId(), ignored -> new ArrayList<>()).add(item);
@@ -387,8 +391,8 @@ public class StatementImportService {
     private boolean transactionAlreadyExists(String accountId, ParsedTransaction transaction) {
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM transactions
-                WHERE account_id = ? AND transaction_date = ? AND description = ? AND amount = ?
-                """, Integer.class, accountId, transaction.date().toString(), transaction.description(), transaction.amount());
+                WHERE owner_user_id = ? AND account_id = ? AND transaction_date = ? AND description = ? AND amount = ?
+                """, Integer.class, ownerUserId(), accountId, transaction.date().toString(), transaction.description(), transaction.amount());
         return count != null && count > 0;
     }
 
@@ -407,6 +411,8 @@ public class StatementImportService {
     }
 
     private String dateString(java.time.LocalDate date) { return date == null ? null : date.toString(); }
+
+    private String ownerUserId() { return FinanceOwnerContext.requireOwnerUserId(); }
 
     private void refreshStatementSummary(String importId, StatementSummary summary) {
         jdbcTemplate.update("""

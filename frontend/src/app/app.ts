@@ -1,4 +1,4 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, OnInit, computed, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { FinanceAuthService } from './core/finance-auth.service';
@@ -24,6 +24,11 @@ export class App implements OnInit {
   );
   protected readonly notificationOpen = signal(false);
   protected readonly profileOpen = signal(false);
+  protected readonly profilePictureFailed = signal(false);
+  protected readonly profileImageUrl = computed(() => {
+    const picture = this.auth.profile()?.picture?.trim();
+    return picture && !this.profilePictureFailed() ? picture : null;
+  });
   protected readonly reminders = signal<Reminder[]>([]);
   protected readonly assistantOpen = signal(false);
   protected readonly assistantMessages = signal<ChatMessage[]>([]);
@@ -49,6 +54,12 @@ export class App implements OnInit {
   protected closeNotifications(): void { this.notificationOpen.set(false); }
   protected toggleProfile(): void { this.profileOpen.update(open => !open); }
   protected closeProfile(): void { this.profileOpen.set(false); }
+  protected useAvatarFallback(): void { this.profilePictureFailed.set(true); }
+  @HostListener('document:click', ['$event'])
+  protected closeProfileWhenClickingOutside(event: MouseEvent): void {
+    const target = event.target;
+    if (this.profileOpen() && target instanceof Element && !target.closest('.profile-control')) this.closeProfile();
+  }
   protected signOut(): void {
     this.closeNotifications();
     this.closeProfile();

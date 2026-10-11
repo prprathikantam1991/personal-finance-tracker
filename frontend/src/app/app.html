@@ -22,12 +22,12 @@
         @if (auth.authenticated()) {
           <div class="profile-control">
             <button type="button" class="profile-button" (click)="toggleProfile()" [attr.aria-expanded]="profileOpen()" aria-label="Open user menu">
-              @if (auth.profile()?.picture) { <img [src]="auth.profile()?.picture" alt="" /> } @else { <span>{{ userInitials() }}</span> }
+              @if (profileImageUrl()) { <img [src]="profileImageUrl()" (error)="useAvatarFallback()" alt="" /> } @else { <span>{{ userInitials() }}</span> }
             </button>
             @if (profileOpen()) {
               <section class="profile-popover" aria-label="User menu">
                 <div class="profile-summary">
-                  @if (auth.profile()?.picture) { <img [src]="auth.profile()?.picture" alt="" /> } @else { <span class="profile-avatar">{{ userInitials() }}</span> }
+                  @if (profileImageUrl()) { <img [src]="profileImageUrl()" (error)="useAvatarFallback()" alt="" /> } @else { <span class="profile-avatar">{{ userInitials() }}</span> }
                   <div><strong>{{ auth.profile()?.name || 'Signed-in user' }}</strong><small>{{ auth.profile()?.email || 'Your Finance Tracker session is active' }}</small></div>
                 </div>
                 <p>Your financial data is private to this signed-in profile.</p>

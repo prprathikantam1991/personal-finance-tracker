@@ -24,11 +24,11 @@ public class TransferDetectionService {
     @Transactional
     public int detectTransfers() {
         List<Candidate> candidates = jdbcTemplate.query("""
-                SELECT t.id, t.account_id, a.account_type, t.transaction_date, t.amount
+                SELECT t.id, t.owner_user_id, t.account_id, a.account_type, t.transaction_date, t.amount
                 FROM transactions t JOIN accounts a ON a.id = t.account_id
                 WHERE t.transfer_group_id IS NULL AND t.category = 'Transfer'
                 ORDER BY t.transaction_date, t.id
-                """, (rs, row) -> new Candidate(rs.getString(1), rs.getString(2), rs.getString(3), LocalDate.parse(rs.getString(4)), rs.getBigDecimal(5)));
+                """, (rs, row) -> new Candidate(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4), LocalDate.parse(rs.getString(5)), rs.getBigDecimal(6)));
         boolean[] linked = new boolean[candidates.size()];
         int links = 0;
         for (int left = 0; left < candidates.size(); left++) {
@@ -36,7 +36,8 @@ public class TransferDetectionService {
             for (int right = left + 1; right < candidates.size(); right++) {
                 if (linked[right] || !matches(candidates.get(left), candidates.get(right))) continue;
                 String groupId = UUID.randomUUID().toString();
-                jdbcTemplate.update("UPDATE transactions SET transfer_group_id = ? WHERE id IN (?, ?)", groupId, candidates.get(left).id(), candidates.get(right).id());
+                jdbcTemplate.update("UPDATE transactions SET transfer_group_id = ? WHERE owner_user_id = ? AND id IN (?, ?)", groupId,
+                        candidates.get(left).ownerUserId(), candidates.get(left).id(), candidates.get(right).id());
                 linked[left] = true;
                 linked[right] = true;
                 links++;
@@ -47,7 +48,7 @@ public class TransferDetectionService {
     }
 
     private boolean matches(Candidate left, Candidate right) {
-        if (left.accountId().equals(right.accountId())
+        if (!left.ownerUserId().equals(right.ownerUserId()) || left.accountId().equals(right.accountId())
                 || Math.abs(ChronoUnit.DAYS.between(left.date(), right.date())) > 5) return false;
 
         boolean oppositeSigns = left.amount().add(right.amount()).compareTo(BigDecimal.ZERO) == 0;
@@ -56,5 +57,5 @@ public class TransferDetectionService {
         return oppositeSigns || cardPaymentWithSameSign;
     }
 
-    private record Candidate(String id, String accountId, String accountType, LocalDate date, BigDecimal amount) { }
+    private record Candidate(String id, String ownerUserId, String accountId, String accountType, LocalDate date, BigDecimal amount) { }
 }

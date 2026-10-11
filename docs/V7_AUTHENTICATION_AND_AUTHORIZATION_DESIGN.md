@@ -25,7 +25,7 @@ The current local-first application now has a migration-safe ownership foundatio
 - `accounts`, statement imports, transactions, category rules, and assistant conversations persist an `owner_user_id`.
 - Existing records migrate to `local-owner`, preserving all existing local data without re-importing statements.
 - A request-scoped `FinanceOwnerContext` is established by a server filter; it never accepts an owner ID from a browser request.
-- Account lookup, account matching, account creation, and card-term updates already use that context and scope their repository queries by owner.
+- Account lookup, account matching, account creation, card-term updates, transaction listing/edits, transfer linking, and remembered merchant-category rules already use that context and scope their repository queries by owner.
 
 This temporary local owner is configured through `FINANCE_LOCAL_OWNER_ID` and exists only to keep the current single-user workflow working during the transition. It is not authentication. The Auth Service handoff will replace the local filter source with a verified Finance session principal, then the same ownership context will protect every remaining repository and tool query.
 

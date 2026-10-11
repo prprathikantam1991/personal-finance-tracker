@@ -10,6 +10,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @Service
 public class TransactionService {
     private final JdbcTemplate jdbcTemplate;
@@ -31,6 +33,8 @@ public class TransactionService {
                 WHERE 1 = 1
                 """);
         List<Object> parameters = new ArrayList<>();
+        sql.append(" AND t.owner_user_id = ?");
+        parameters.add(ownerUserId());
         if (accountId != null && !accountId.isBlank()) {
             sql.append(" AND t.account_id = ?");
             parameters.add(accountId);
@@ -63,9 +67,9 @@ public class TransactionService {
 
     @Transactional
     public TransactionResponse updateCategory(String transactionId, CategoryUpdateRequest request) {
-        String description = jdbcTemplate.query("SELECT description FROM transactions WHERE id = ?", rs -> rs.next() ? rs.getString(1) : null, transactionId);
+        String description = jdbcTemplate.query("SELECT description FROM transactions WHERE id = ? AND owner_user_id = ?", rs -> rs.next() ? rs.getString(1) : null, transactionId, ownerUserId());
         if (description == null) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Transaction not found.");
-        jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ?", request.category().trim(), transactionId);
+        jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ? AND owner_user_id = ?", request.category().trim(), transactionId, ownerUserId());
         if (request.rememberForFuture()) categoryRuleService.remember(description, request.category().trim());
         return transactionResponse(transactionId);
     }
@@ -76,12 +80,12 @@ public class TransactionService {
         String placeholders = String.join(",", java.util.Collections.nCopies(ids.size(), "?"));
         List<String> eligibleIds = jdbcTemplate.query("""
                 SELECT id FROM transactions
-                WHERE id IN (""" + placeholders + ") AND transfer_group_id IS NULL AND category <> 'Transfer'", (rs, row) -> rs.getString(1), ids.toArray());
+                WHERE owner_user_id = ? AND id IN (""" + placeholders + ") AND transfer_group_id IS NULL AND category <> 'Transfer'", (rs, row) -> rs.getString(1), parameters(ownerUserId(), ids));
         String category = request.category().trim();
         for (String id : eligibleIds) {
-            jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ?", category, id);
+            jdbcTemplate.update("UPDATE transactions SET category = ? WHERE id = ? AND owner_user_id = ?", category, id, ownerUserId());
             if (request.rememberForFuture()) {
-                String description = jdbcTemplate.query("SELECT description FROM transactions WHERE id = ?", rs -> rs.next() ? rs.getString(1) : null, id);
+                String description = jdbcTemplate.query("SELECT description FROM transactions WHERE id = ? AND owner_user_id = ?", rs -> rs.next() ? rs.getString(1) : null, id, ownerUserId());
                 if (description != null) categoryRuleService.remember(description, category);
             }
         }
@@ -91,13 +95,24 @@ public class TransactionService {
     private TransactionResponse transactionResponse(String transactionId) {
         return jdbcTemplate.queryForObject("""
                 SELECT t.id, t.account_id, a.name AS account_name, a.account_type, t.transaction_date, t.description, t.amount, t.balance, t.category, t.transfer_group_id, t.status
-                FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ?
-                """, (rs, row) -> new TransactionResponse(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4) == null ? null : AccountType.valueOf(rs.getString(4)), LocalDate.parse(rs.getString(5)), rs.getString(6), merchantNormalizer.normalize(rs.getString(6)), rs.getBigDecimal(7), rs.getBigDecimal(8), rs.getString(9), confidence(rs.getString(9), rs.getString(10), rs.getString(6)), rs.getString(10), rs.getString(11)), transactionId);
+                FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ? AND t.owner_user_id = ?
+                """, (rs, row) -> new TransactionResponse(rs.getString(1), rs.getString(2), rs.getString(3), rs.getString(4) == null ? null : AccountType.valueOf(rs.getString(4)), LocalDate.parse(rs.getString(5)), rs.getString(6), merchantNormalizer.normalize(rs.getString(6)), rs.getBigDecimal(7), rs.getBigDecimal(8), rs.getString(9), confidence(rs.getString(9), rs.getString(10), rs.getString(6)), rs.getString(10), rs.getString(11)), transactionId, ownerUserId());
     }
 
     private String confidence(String category, String transferGroupId, String description) {
         if (transferGroupId != null || "Transfer".equals(category) || categoryRuleService.hasMerchantRule(description)) return "HIGH";
         if ("Uncategorized".equals(category)) return "NEEDS_REVIEW";
         return "MEDIUM";
+    }
+
+    private String ownerUserId() {
+        return FinanceOwnerContext.requireOwnerUserId();
+    }
+
+    private Object[] parameters(String ownerUserId, List<String> ids) {
+        List<Object> values = new ArrayList<>();
+        values.add(ownerUserId);
+        values.addAll(ids);
+        return values.toArray();
     }
 }

@@ -37,7 +37,10 @@ public class FinanceSessionService {
     public Optional<FinanceSession> findValid(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) return Optional.empty();
         Instant now = Instant.now();
-        jdbcTemplate.update("DELETE FROM finance_sessions WHERE expires_at <= ?", now.toString());
+        // This is called on every authenticated request. Keep it read-only so a
+        // dashboard refresh cannot contend with imports or another session write
+        // in SQLite. Expired rows are ignored by the query and can be purged by a
+        // separate maintenance task later.
         return jdbcTemplate.query("""
                         SELECT id, owner_user_id, expires_at FROM finance_sessions
                         WHERE id = ? AND expires_at > ?

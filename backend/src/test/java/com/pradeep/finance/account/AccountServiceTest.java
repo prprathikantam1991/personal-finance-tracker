@@ -93,4 +93,21 @@ class AccountServiceTest {
 
         assertThat(response.status()).isEqualTo(AccountIdentificationResponse.AccountMatchStatus.CONFIRMATION_REQUIRED);
     }
+
+    @Test
+    void archivesLegacyWellsAutographInsteadOfPresentingItAsAnActiveWellsCard() {
+        Account legacy = new Account("Wells Fargo Autograph •9484", "wells fargo", AccountType.CREDIT_CARD,
+                "9484", "test-owner|wells fargo|9484", "USD", OWNER);
+        legacy.initializePersistenceFields();
+        when(accountRepository.findByOwnerUserIdAndIdentityKey(OWNER, "test-owner|bilt|9484")).thenReturn(Optional.empty());
+        when(accountRepository.findByOwnerUserIdAndIdentityKey(OWNER, "test-owner|wells fargo|9484")).thenReturn(Optional.of(legacy));
+
+        var response = accountService.preserveLegacyBiltHistory("9484");
+
+        assertThat(response.status()).isEqualTo(AccountIdentificationResponse.AccountMatchStatus.MATCHED);
+        assertThat(legacy.getName()).isEqualTo("Legacy Bilt •9484");
+        assertThat(legacy.getInstitution()).isEqualTo("bilt");
+        assertThat(legacy.isArchived()).isTrue();
+        assertThat(response.message()).contains("excluded from active accounts");
+    }
 }

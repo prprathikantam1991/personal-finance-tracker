@@ -82,7 +82,7 @@ public class WatchedFolderImportService {
 
     private boolean isLegacyCardConversionNotice(StatementImportResponse response) {
         return response.accountIdentification().account() != null
-                && response.accountIdentification().message().contains("converted Wells Fargo Autograph account");
+                && response.accountIdentification().message().contains("preserved legacy Bilt history");
     }
 
     public List<IncomingStatementItem> incomingStatements() {

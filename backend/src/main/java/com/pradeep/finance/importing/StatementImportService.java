@@ -224,13 +224,13 @@ public class StatementImportService {
         }
         Matcher biltAccountMatch = BILT_CSV_CARD_LAST_FOUR.matcher(text);
         if ((text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT")) && biltAccountMatch.find()) {
-            accountService.reconcileBiltToWellsAutograph("9484");
+            accountService.preserveLegacyBiltHistory("9484");
             String lastFour = "2658";
             return accountService.identifyOrCreate(new AccountIdentificationRequest(
                     "Bilt", AccountType.CREDIT_CARD, lastFour, "Bilt •" + lastFour, "USD"));
         }
         if (text.contains("Bilt Mastercard") && text.contains("Autograph")) {
-            return accountService.reconcileBiltToWellsAutograph("9484");
+            return accountService.preserveLegacyBiltHistory("9484");
         }
         Matcher bankOfAmericaCardMatch = BOFA_CARD_NUMBER.matcher(text);
         if ((text.contains("Visa Signature") || text.contains("Total Credit Line")) && bankOfAmericaCardMatch.find()) {
@@ -448,7 +448,7 @@ public class StatementImportService {
 
     private java.util.Map<String, String> biltAccountIds(String text) {
         if (!(text.contains("Bilt Rewards") || text.contains("Bilt Housing") || text.contains("BPS*BILT"))) return java.util.Map.of();
-        AccountIdentificationResponse wells = accountService.reconcileBiltToWellsAutograph("9484");
+        AccountIdentificationResponse wells = accountService.preserveLegacyBiltHistory("9484");
         AccountIdentificationResponse bilt = accountService.identifyOrCreate(new AccountIdentificationRequest(
                 "Bilt", AccountType.CREDIT_CARD, "2658", "Bilt •2658", "USD"));
         return java.util.Map.of("9484", wells.account().id(), "2658", bilt.account().id());

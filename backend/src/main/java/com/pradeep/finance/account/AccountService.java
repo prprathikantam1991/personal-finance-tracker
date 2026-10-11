@@ -19,7 +19,7 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public List<AccountResponse> listAccounts() {
-        return accountsForCurrentOwner().stream()
+        return activeAccountsForCurrentOwner().stream()
                 .map(AccountResponse::from)
                 .toList();
     }
@@ -55,25 +55,38 @@ public class AccountService {
         });
     }
 
-    /** Preserves one credit-line history when the legacy Bilt card became a Wells Fargo Autograph card. */
+    /**
+     * Preserves history from the old Bilt card without treating it as a current Wells Fargo card.
+     * The old account remains available through its imported ledger, but is excluded from active
+     * account cards, statement coverage, and credit-utilization calculations.
+     */
     @Transactional
-    public AccountIdentificationResponse reconcileBiltToWellsAutograph(String lastFour) {
-        String wellsIdentity = buildIdentityKey("wells fargo", normalizeLastFour(lastFour));
-        var existingWells = accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), wellsIdentity);
-        if (existingWells.isPresent()) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
-                AccountResponse.from(existingWells.get()), "Matched the converted Wells Fargo Autograph account.");
+    public AccountIdentificationResponse preserveLegacyBiltHistory(String lastFour) {
         String biltIdentity = buildIdentityKey("bilt", normalizeLastFour(lastFour));
         return accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), biltIdentity).map(account -> {
-            account.rebrand("Wells Fargo Autograph •" + lastFour, "wells fargo", wellsIdentity);
+            account.archive();
             return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
-                    AccountResponse.from(account), "Preserved legacy Bilt history on the converted Wells Fargo Autograph account.");
-        }).orElseGet(() -> createAccount(new AccountIdentificationRequest("Wells Fargo", AccountType.CREDIT_CARD,
-                lastFour, "Wells Fargo Autograph •" + lastFour, "USD"), "wells fargo", lastFour, wellsIdentity));
+                    AccountResponse.from(account), "Preserved legacy Bilt history; it is excluded from active accounts.");
+        }).orElseGet(() -> {
+            String wellsIdentity = buildIdentityKey("wells fargo", normalizeLastFour(lastFour));
+            return accountRepository.findByOwnerUserIdAndIdentityKey(currentOwnerUserId(), wellsIdentity).map(account -> {
+                account.rebrand("Legacy Bilt •" + lastFour, "bilt", biltIdentity);
+                account.archive();
+                return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
+                        AccountResponse.from(account), "Preserved legacy Bilt history; it is excluded from active accounts.");
+            }).orElseGet(() -> {
+                AccountIdentificationResponse response = createAccount(new AccountIdentificationRequest("Bilt", AccountType.CREDIT_CARD,
+                        lastFour, "Legacy Bilt •" + lastFour, "USD"), "bilt", lastFour, biltIdentity);
+                accountRepository.findById(response.account().id()).ifPresent(Account::archive);
+                return new AccountIdentificationResponse(response.status(), response.account(),
+                        "Preserved legacy Bilt history; it is excluded from active accounts.");
+            });
+        });
     }
 
     @Transactional(readOnly = true)
     public AccountIdentificationResponse identifyExistingBiltCreditCard() {
-        List<Account> biltCards = accountsForCurrentOwner().stream()
+        List<Account> biltCards = activeAccountsForCurrentOwner().stream()
                 .filter(account -> "bilt".equalsIgnoreCase(account.getInstitution()))
                 .filter(account -> account.getAccountType() == AccountType.CREDIT_CARD).toList();
         if (biltCards.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
@@ -90,7 +103,7 @@ public class AccountService {
     @Transactional(readOnly = true)
     public AccountIdentificationResponse identifySoleAccount(String institution, AccountType accountType) {
         String normalizedInstitution = normalizeInstitution(institution);
-        List<Account> matches = accountsForCurrentOwner().stream()
+        List<Account> matches = activeAccountsForCurrentOwner().stream()
                 .filter(account -> normalizedInstitution.equalsIgnoreCase(account.getInstitution()))
                 .filter(account -> accountType == account.getAccountType()).toList();
         if (matches.size() == 1) return new AccountIdentificationResponse(AccountIdentificationResponse.AccountMatchStatus.MATCHED,
@@ -142,5 +155,9 @@ public class AccountService {
 
     private List<Account> accountsForCurrentOwner() {
         return accountRepository.findAllByOwnerUserIdOrderByInstitutionAscNameAsc(currentOwnerUserId());
+    }
+
+    private List<Account> activeAccountsForCurrentOwner() {
+        return accountsForCurrentOwner().stream().filter(account -> !account.isArchived()).toList();
     }
 }

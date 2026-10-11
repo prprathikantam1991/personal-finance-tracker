@@ -57,6 +57,12 @@ public class Account {
     @Column(name = "penalty_apr")
     private BigDecimal penaltyApr;
 
+    @Column(nullable = false)
+    private boolean archived;
+
+    @Column(name = "archived_at")
+    private String archivedAt;
+
     @Column(name = "created_at", nullable = false)
     private String createdAt;
 
@@ -96,6 +102,8 @@ public class Account {
     public String getPromotionalAprExpiresOn() { return promotionalAprExpiresOn; }
     public BigDecimal getCreditLimit() { return creditLimit; }
     public BigDecimal getPenaltyApr() { return penaltyApr; }
+    public boolean isArchived() { return archived; }
+    public Instant getArchivedAt() { return archivedAt == null ? null : Instant.parse(archivedAt); }
     public Instant getCreatedAt() { return Instant.parse(createdAt); }
 
     void captureCardTerms(ExtractedCardTerms terms) {
@@ -110,6 +118,11 @@ public class Account {
         this.name = name;
         this.institution = institution;
         this.identityKey = identityKey;
+    }
+
+    void archive() {
+        archived = true;
+        archivedAt = Instant.now().toString();
     }
 
 }

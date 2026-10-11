@@ -57,7 +57,9 @@ public class Account {
     @Column(name = "penalty_apr")
     private BigDecimal penaltyApr;
 
-    @Column(nullable = false)
+    // SQLite persists booleans as INTEGER. Declaring that explicitly keeps Hibernate's
+    // schema validator aligned with the durable V26 migration.
+    @Column(nullable = false, columnDefinition = "INTEGER")
     private boolean archived;
 
     @Column(name = "archived_at")

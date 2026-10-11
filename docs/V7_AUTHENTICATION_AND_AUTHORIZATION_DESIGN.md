@@ -1,6 +1,6 @@
 # V7 — Finance Tracker Authentication, Authorization, and Session Design
 
-**Status:** in progress. The owner-boundary foundation, one-time Auth Service handoff, Finance server-side session foundation, and browser sign-in/sign-out foundation are implemented. CSRF enforcement and production-grade signed service assertions remain.
+**Status:** in progress. Owner-scoped data, Auth Service handoff, Finance server-side sessions, and browser sign-in/sign-out are implemented. CSRF enforcement and production-grade signed service assertions remain.
 
 ## Purpose
 
@@ -20,16 +20,13 @@ It is intentionally separate from the broader [V7 Auth and Plaid implementation 
 
 ## Implemented foundation
 
-The current local-first application now has a migration-safe ownership foundation:
+The current application has an authenticated ownership foundation:
 
 - `accounts`, statement imports, transactions, category rules, and assistant conversations persist an `owner_user_id`.
-- Existing records migrate to `local-owner`, preserving all existing local data without re-importing statements.
 - A request-scoped `FinanceOwnerContext` is established by a server filter; it never accepts an owner ID from a browser request.
 - Account lookup, account matching, account creation, card-term updates, transaction listing/edits, import history/review, transfer linking, remembered merchant-category rules, dashboard analytics, recurring detection, Assistant conversation history, and the Assistant's corresponding read-only tools already use that context and scope their queries by owner.
 
-This temporary local owner is configured through `FINANCE_LOCAL_OWNER_ID` and exists only to keep the current single-user workflow working during the transition. It is not authentication. The Auth Service handoff will replace the local filter source with a verified Finance session principal, then the same ownership context will protect every remaining repository and tool query.
-
-When the first verified Finance session is created, a transactionally guarded bootstrap record permits exactly one migration from `local-owner` to that authenticated internal user ID. The record is permanently marked as claimed before subsequent requests can proceed; later users receive only their own newly created data.
+The completed one-time conversion assigned the former local ledger to the verified internal User Service ID without re-importing statements. Its bootstrap table and runtime claim code have been removed. Authentication is now mandatory: the owner filter accepts only a verified Finance session, and each new record receives the owner from that session.
 
 ## Terms
 
@@ -154,7 +151,7 @@ The browser may send an account ID, transaction ID, or import ID, but it never s
 - Finance Tracker creates a cryptographically random opaque session ID only after validating the one-time Auth Service handoff.
 - The session record lives in a private session store such as Redis and contains the internal owner UUID, issued time, absolute expiry, idle timeout, CSRF state, granted scopes, and optional upstream `sid`.
 - The browser receives only the random session ID in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. For production, use HTTPS and a narrowly scoped domain/path. Local development may relax `Secure` only in an explicit local profile.
-- The Angular browser client enables `withCredentials` only for Finance Tracker API calls. It never sends an application user ID or bearer token from browser storage. When `FINANCE_AUTH_ENABLED=false` (the default during migration), the existing local-only owner remains active and the sign-in control stays hidden.
+- The Angular browser client enables `withCredentials` only for Finance Tracker API calls. It never sends an application user ID or bearer token from browser storage. The sign-in control is shown whenever the Finance session is absent or expired.
 
 ### Use and renewal
 

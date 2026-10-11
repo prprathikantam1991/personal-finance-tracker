@@ -1,10 +1,6 @@
 package com.pradeep.finance.security;
 
-/**
- * Request-scoped owner identity. The current local implementation supplies a
- * configured development owner; V7 authentication will replace that source
- * with the verified Finance session principal.
- */
+/** Request-scoped owner identity derived from the verified Finance session principal. */
 public final class FinanceOwnerContext {
     private static final ThreadLocal<String> OWNER = new ThreadLocal<>();
 

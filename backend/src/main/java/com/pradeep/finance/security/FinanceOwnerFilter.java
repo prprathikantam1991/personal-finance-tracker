@@ -12,24 +12,17 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
- * Transitional V7 owner source for the existing local-first single-user app.
- * It never trusts a client-supplied owner value. The future Finance session
- * filter will establish the same context from a verified Auth Service handoff.
+ * Establishes the request owner exclusively from a verified Finance session.
+ * It never trusts a client-supplied owner value.
  */
 @Component
 public class FinanceOwnerFilter extends OncePerRequestFilter {
-    private final String localOwnerUserId;
-    private final boolean authenticationEnabled;
     private final String cookieName;
     private final ObjectProvider<FinanceSessionService> sessions;
 
     public FinanceOwnerFilter(
-            @Value("${finance.security.local-owner-id:local-owner}") String localOwnerUserId,
-            @Value("${finance.security.authentication-enabled:false}") boolean authenticationEnabled,
             @Value("${finance.security.session.cookie-name:finance_session}") String cookieName,
             ObjectProvider<FinanceSessionService> sessions) {
-        this.localOwnerUserId = localOwnerUserId;
-        this.authenticationEnabled = authenticationEnabled;
         this.cookieName = cookieName;
         this.sessions = sessions;
     }
@@ -44,7 +37,7 @@ public class FinanceOwnerFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String ownerUserId = authenticationEnabled ? authenticatedOwner(request) : localOwnerUserId;
+        String ownerUserId = authenticatedOwner(request);
         if (ownerUserId == null) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Sign in is required.");
             return;

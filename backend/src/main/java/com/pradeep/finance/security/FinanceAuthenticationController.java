@@ -25,27 +25,21 @@ public class FinanceAuthenticationController {
     private static final Logger log = LoggerFactory.getLogger(FinanceAuthenticationController.class);
     private final AuthServiceHandoffClient handoffClient;
     private final FinanceSessionService sessions;
-    private final LegacyOwnerClaimService legacyOwnerClaimService;
     private final String cookieName;
     private final boolean cookieSecure;
     private final String allowedReturnUrl;
-    private final boolean authenticationEnabled;
 
     public FinanceAuthenticationController(
             AuthServiceHandoffClient handoffClient,
             FinanceSessionService sessions,
-            LegacyOwnerClaimService legacyOwnerClaimService,
             @Value("${finance.security.session.cookie-name:finance_session}") String cookieName,
             @Value("${finance.security.session.cookie-secure:false}") boolean cookieSecure,
-            @Value("${finance.security.handoff.allowed-return-url:http://localhost:4200/dashboard}") String allowedReturnUrl,
-            @Value("${finance.security.authentication-enabled:false}") boolean authenticationEnabled) {
+            @Value("${finance.security.handoff.allowed-return-url:http://localhost:4200/dashboard}") String allowedReturnUrl) {
         this.handoffClient = handoffClient;
         this.sessions = sessions;
-        this.legacyOwnerClaimService = legacyOwnerClaimService;
         this.cookieName = cookieName;
         this.cookieSecure = cookieSecure;
         this.allowedReturnUrl = allowedReturnUrl;
-        this.authenticationEnabled = authenticationEnabled;
     }
 
     @GetMapping("/handoff/callback")
@@ -54,7 +48,6 @@ public class FinanceAuthenticationController {
         Optional<String> ownerUserId = handoffClient.exchange(code);
         if (ownerUserId.isEmpty()) return "redirect:" + allowedReturnUrl + "?signIn=failed";
 
-        legacyOwnerClaimService.claimIfAvailable(ownerUserId.get());
         FinanceSession session = sessions.create(ownerUserId.get());
         response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(cookieName, session.id())
                 .httpOnly(true)
@@ -69,10 +62,10 @@ public class FinanceAuthenticationController {
     @GetMapping("/session")
     @ResponseBody
     public Map<String, Boolean> session(jakarta.servlet.http.HttpServletRequest request) {
-        boolean authenticated = !authenticationEnabled || sessionCookie(request)
+        boolean authenticated = sessionCookie(request)
                 .flatMap(sessions::findValid)
                 .isPresent();
-        return Map.of("authenticationEnabled", authenticationEnabled, "authenticated", authenticated);
+        return Map.of("authenticationEnabled", true, "authenticated", authenticated);
     }
 
     @PostMapping("/logout")

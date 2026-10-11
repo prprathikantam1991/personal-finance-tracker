@@ -61,10 +61,8 @@ server:
 
 finance:
   security:
-    # Disabled by default during the transition; enable only after the Auth and User services are running.
-    authentication-enabled: ${FINANCE_AUTH_ENABLED:false}
-    # Transitional local owner used only while authentication-enabled is false.
-    local-owner-id: ${FINANCE_LOCAL_OWNER_ID:local-owner}
+    # Authentication is mandatory. A verified Auth Service handoff creates the
+    # opaque Finance session used to establish an owner for every request.
     session:
       cookie-name: finance_session
       cookie-secure: ${FINANCE_SESSION_COOKIE_SECURE:false}

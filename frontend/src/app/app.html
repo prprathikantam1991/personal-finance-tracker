@@ -12,17 +12,19 @@
       </nav>
     }
     <div class="top-actions">
+      @if (canShowProtectedContent()) {
+        <div class="notification-control">
+          <button type="button" class="icon-button" (click)="toggleNotifications()" [attr.aria-expanded]="notificationOpen()" aria-label="Open notifications">🔔@if (reminders().length) { <b>{{ reminders().length }}</b> }</button>
+          @if (notificationOpen()) { <section class="notification-popover" aria-label="Notifications"><div class="popover-heading"><strong>Notifications</strong><button type="button" (click)="closeNotifications()" aria-label="Close notifications">×</button></div>@if (reminders().length) { @for (reminder of reminders().slice(0, 4); track reminder.id) { <a [routerLink]="['/accounts', reminder.accountId, 'history']" (click)="closeNotifications()"><span [class.urgent]="reminder.severity === 'OVERDUE' || reminder.severity === 'URGENT'">{{ reminder.title }}</span><small>{{ reminder.accountName }} · {{ reminder.date }}</small></a> } } @else { <p>Nothing needs attention right now.</p> }<a class="view-all" routerLink="/notifications" (click)="closeNotifications()">View all reminders</a></section> }
+        </div>
+      }
       @if (auth.authenticationEnabled()) {
         @if (auth.authenticated()) {
-          <button type="button" class="session-button" (click)="auth.signOut()">Sign out</button>
+          <button type="button" class="session-button" (click)="signOut()">Sign out</button>
         } @else {
           <button type="button" class="session-button primary" (click)="auth.signIn()">Sign in</button>
         }
       }
-      <div class="notification-control">
-      <button type="button" class="icon-button" (click)="toggleNotifications()" [attr.aria-expanded]="notificationOpen()" aria-label="Open notifications">🔔@if (reminders().length) { <b>{{ reminders().length }}</b> }</button>
-        @if (notificationOpen()) { <section class="notification-popover" aria-label="Notifications"><div class="popover-heading"><strong>Notifications</strong><button type="button" (click)="closeNotifications()" aria-label="Close notifications">×</button></div>@if (reminders().length) { @for (reminder of reminders().slice(0, 4); track reminder.id) { <a [routerLink]="['/accounts', reminder.accountId, 'history']" (click)="closeNotifications()"><span [class.urgent]="reminder.severity === 'OVERDUE' || reminder.severity === 'URGENT'">{{ reminder.title }}</span><small>{{ reminder.accountName }} · {{ reminder.date }}</small></a> } } @else { <p>Nothing needs attention right now.</p> }<a class="view-all" routerLink="/notifications" (click)="closeNotifications()">View all reminders</a></section> }
-      </div>
     </div>
   </header>
   @if (canShowProtectedContent()) {

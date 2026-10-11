@@ -37,4 +37,8 @@ export class App implements OnInit {
 
   protected toggleNotifications(): void { this.notificationOpen.update(open => !open); }
   protected closeNotifications(): void { this.notificationOpen.set(false); }
+  protected signOut(): void {
+    this.closeNotifications();
+    this.auth.signOut();
+  }
 }

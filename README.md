@@ -166,4 +166,5 @@ cd frontend; npm run build
 - [V10 explicit-memory plan](docs/V10_EXPLICIT_MEMORY_PLAN.md) — user-controlled durable Assistant preferences, separate from chat history and ledger data.
 - [V6 Spring AI delivery](docs/V6_DELIVERY.md) and [migration plan](docs/V6_SPRING_AI_MIGRATION_PLAN.md) — supported Gemma runtime, verification evidence, and the retained rollback path.
 - [V7 authentication and Plaid implementation plan](docs/V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md) — staged identity hardening, per-user ledger isolation, and optional connected-account design.
+- [V7 authentication and authorization design](docs/V7_AUTHENTICATION_AND_AUTHORIZATION_DESIGN.md) — request validation, sessions, ownership enforcement, and the Assistant authorization boundary.
 - [Development roadmap](docs/ROADMAP.md) — completed work and next milestones.

@@ -14,6 +14,9 @@ finance-tracker-archive/
 **/*secret*
 **/*token*
 
+# Personal interview notes and local learning material — never publish
+docs/private/
+
 # Build artifacts and dependencies
 backend/target/
 frontend/node_modules/

@@ -29,6 +29,8 @@ The current local-first application now has a migration-safe ownership foundatio
 
 This temporary local owner is configured through `FINANCE_LOCAL_OWNER_ID` and exists only to keep the current single-user workflow working during the transition. It is not authentication. The Auth Service handoff will replace the local filter source with a verified Finance session principal, then the same ownership context will protect every remaining repository and tool query.
 
+When the first verified Finance session is created, a transactionally guarded bootstrap record permits exactly one migration from `local-owner` to that authenticated internal user ID. The record is permanently marked as claimed before subsequent requests can proceed; later users receive only their own newly created data.
+
 ## Terms
 
 - **Authentication:** proving who the person is.

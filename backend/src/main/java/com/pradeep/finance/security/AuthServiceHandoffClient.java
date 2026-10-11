@@ -9,9 +9,13 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /** Exchanges a browser-visible, one-time code for an owner ID over the private service channel. */
 @Component
 public class AuthServiceHandoffClient {
+    private static final Logger log = LoggerFactory.getLogger(AuthServiceHandoffClient.class);
     private final RestClient restClient;
     private final String serviceKey;
 
@@ -24,7 +28,14 @@ public class AuthServiceHandoffClient {
     }
 
     public Optional<String> exchange(String code) {
-        if (serviceKey == null || serviceKey.isBlank() || code == null || code.isBlank()) return Optional.empty();
+        if (serviceKey == null || serviceKey.isBlank()) {
+            log.warn("Finance handoff is unavailable because its service credential is not configured");
+            return Optional.empty();
+        }
+        if (code == null || code.isBlank()) {
+            log.warn("Finance handoff callback was received without a code");
+            return Optional.empty();
+        }
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restClient.post()
@@ -36,7 +47,9 @@ public class AuthServiceHandoffClient {
                     .body(Map.class);
             Object ownerUserId = response == null ? null : response.get("ownerUserId");
             return ownerUserId instanceof String owner && !owner.isBlank() ? Optional.of(owner) : Optional.empty();
-        } catch (RestClientException ignored) {
+        } catch (RestClientException exception) {
+            // Do not log the exception: the request URL includes a single-use handoff code.
+            log.warn("Finance handoff exchange was rejected or unavailable");
             return Optional.empty();
         }
     }

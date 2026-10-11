@@ -67,6 +67,11 @@ finance:
       cookie-name: finance_session
       cookie-secure: ${FINANCE_SESSION_COOKIE_SECURE:false}
       max-age: ${FINANCE_SESSION_MAX_AGE:PT8H}
+      idle-timeout: ${FINANCE_SESSION_IDLE_TIMEOUT:PT30M}
+      touch-interval: ${FINANCE_SESSION_TOUCH_INTERVAL:PT5M}
+      cleanup-interval-ms: ${FINANCE_SESSION_CLEANUP_INTERVAL_MS:900000}
+    cors:
+      allowed-origin: ${FINANCE_CORS_ALLOWED_ORIGIN:http://localhost:4200}
     handoff:
       auth-service-url: ${AUTH_SERVICE_URL:http://localhost:8081}
       service-key: ${FINANCE_HANDOFF_SERVICE_KEY:}

@@ -7,7 +7,10 @@ import { FinanceAuthService } from './finance-auth.service';
 export const financeSessionInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(FinanceAuthService);
   if (request.url.startsWith('http://localhost:8080/')) {
-    return next(request.clone({ withCredentials: true })).pipe(
+    const csrfToken = auth.csrfToken();
+    const isMutation = !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(request.method);
+    const headers = isMutation && csrfToken ? request.headers.set('X-Finance-CSRF', csrfToken) : request.headers;
+    return next(request.clone({ withCredentials: true, headers })).pipe(
       catchError((error: HttpErrorResponse) => {
         if (error.status === 401) auth.markUnauthenticated();
         return throwError(() => error);

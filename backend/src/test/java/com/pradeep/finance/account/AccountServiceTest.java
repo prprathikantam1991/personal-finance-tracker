@@ -50,7 +50,7 @@ class AccountServiceTest {
     @Test
     void createsAccountWhenNoIdentityMatchExists() {
         var request = new AccountIdentificationRequest("Example Bank", AccountType.CHECKING, "1234", null, "usd");
-        when(accountRepository.findByOwnerUserIdAndIdentityKey(OWNER, "example bank|1234")).thenReturn(Optional.empty());
+        when(accountRepository.findByOwnerUserIdAndIdentityKey(OWNER, "test-owner|example bank|1234")).thenReturn(Optional.empty());
         when(accountRepository.save(any(Account.class))).thenAnswer(invocation -> {
             Account account = invocation.getArgument(0);
             account.initializePersistenceFields();

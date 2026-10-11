@@ -40,7 +40,7 @@ class FinanceOwnerFilterTest {
     void establishesAndClearsOwnerForAVerifiedFinanceSession() throws Exception {
         FinanceSessionService sessionService = mock(FinanceSessionService.class);
         when(sessionService.findValid("session-id")).thenReturn(Optional.of(
-                new FinanceSession("session-id", "owner-123", Instant.now().plusSeconds(60))));
+                new FinanceSession("session-id", "owner-123", "csrf-token", Instant.now().plusSeconds(60))));
         FinanceOwnerFilter filter = new FinanceOwnerFilter("finance_session", provider(sessionService));
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/accounts");
         request.setCookies(new Cookie("finance_session", "session-id"));

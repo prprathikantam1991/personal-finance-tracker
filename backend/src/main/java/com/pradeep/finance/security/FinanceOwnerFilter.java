@@ -6,6 +6,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -16,7 +18,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * It never trusts a client-supplied owner value.
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class FinanceOwnerFilter extends OncePerRequestFilter {
+    static final String SESSION_REQUEST_ATTRIBUTE = FinanceOwnerFilter.class.getName() + ".session";
     private final String cookieName;
     private final ObjectProvider<FinanceSessionService> sessions;
 
@@ -30,19 +34,20 @@ public class FinanceOwnerFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String uri = request.getRequestURI();
-        return uri.startsWith("/actuator/") || uri.equals("/api/health") || uri.equals("/api/auth/handoff/callback")
-                || uri.equals("/api/auth/session") || uri.equals("/api/auth/logout");
+        return "OPTIONS".equalsIgnoreCase(request.getMethod()) || uri.startsWith("/actuator/") || uri.equals("/api/health") || uri.equals("/api/auth/handoff/callback")
+                || uri.equals("/api/auth/session");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
-        String ownerUserId = authenticatedOwner(request);
-        if (ownerUserId == null) {
+        FinanceSession session = authenticatedSession(request);
+        if (session == null) {
             response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Sign in is required.");
             return;
         }
-        FinanceOwnerContext.set(ownerUserId);
+        request.setAttribute(SESSION_REQUEST_ATTRIBUTE, session);
+        FinanceOwnerContext.set(session.ownerUserId());
         try {
             filterChain.doFilter(request, response);
         } finally {
@@ -50,13 +55,12 @@ public class FinanceOwnerFilter extends OncePerRequestFilter {
         }
     }
 
-    private String authenticatedOwner(HttpServletRequest request) {
+    private FinanceSession authenticatedSession(HttpServletRequest request) {
         if (request.getCookies() == null) return null;
         for (var cookie : request.getCookies()) {
             if (cookieName.equals(cookie.getName())) {
                 FinanceSessionService sessionService = sessions.getIfAvailable();
-                return sessionService == null ? null
-                        : sessionService.findValid(cookie.getValue()).map(FinanceSession::ownerUserId).orElse(null);
+                return sessionService == null ? null : sessionService.findValid(cookie.getValue()).orElse(null);
             }
         }
         return null;

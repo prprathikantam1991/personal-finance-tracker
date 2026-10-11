@@ -1,7 +1,6 @@
 package com.pradeep.finance.security;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 
 import jakarta.servlet.http.Cookie;
@@ -61,21 +60,22 @@ public class FinanceAuthenticationController {
 
     @GetMapping("/session")
     @ResponseBody
-    public Map<String, Boolean> session(jakarta.servlet.http.HttpServletRequest request) {
-        boolean authenticated = sessionCookie(request)
+    public FinanceSessionStatus session(jakarta.servlet.http.HttpServletRequest request) {
+        Optional<FinanceSession> session = sessionCookie(request)
                 .flatMap(sessions::findValid)
-                .isPresent();
-        return Map.of("authenticationEnabled", true, "authenticated", authenticated);
+                ;
+        return session.map(value -> new FinanceSessionStatus(true, true, value.csrfToken()))
+                .orElseGet(() -> new FinanceSessionStatus(true, false, null));
     }
 
     @PostMapping("/logout")
     @ResponseBody
-    public Map<String, Boolean> logout(jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
+    public java.util.Map<String, Boolean> logout(jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
         boolean invalidated = sessionCookie(request).map(sessions::invalidate).orElse(false);
         response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(cookieName, "")
                 .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/").maxAge(Duration.ZERO).build().toString());
         log.info("Finance logout completed; server session invalidated={}", invalidated);
-        return Map.of("signedOut", true);
+        return java.util.Map.of("signedOut", true);
     }
 
     private String safeReturnUrl(String returnUrl) {
@@ -88,5 +88,8 @@ public class FinanceAuthenticationController {
             if (cookieName.equals(cookie.getName())) return Optional.of(cookie.getValue());
         }
         return Optional.empty();
+    }
+
+    public record FinanceSessionStatus(boolean authenticationEnabled, boolean authenticated, String csrfToken) {
     }
 }

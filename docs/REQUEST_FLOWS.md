@@ -51,9 +51,9 @@ When a statement layout identifies its institution and account type but omits th
 
 A legacy Wells Fargo Bilt-to-Autograph conversion notice is a separate safe case: it is matched to the preserved Autograph credit line and archived after confirmation even when it contains neither transactions nor a statement snapshot. The application records the import but does not create financial activity from an informational notice.
 
-## Planned V7 authenticated request and Plaid connection
+## V7 authenticated request and future Plaid connection
 
-V7 will validate a Finance Tracker application identity before resolving any finance data. The authenticated user's stable internal ID becomes the mandatory owner boundary for imports, ledger data, Assistant history, notifications, and future Plaid Items. A Plaid access token will be exchanged and stored only by the backend, encrypted and scoped to that owner; the browser sees a short-lived Link token and connection status only. See the [V7 implementation plan](V7_AUTH_AND_PLAID_IMPLEMENTATION_PLAN.md) for the full lifecycle and security constraints.
+After Google login, Auth Service maps the person to their stable User Service ID and redirects with a single-use Finance handoff code. Finance Tracker exchanges it server-to-server, creates an opaque HttpOnly `finance_session`, and derives the owner for every protected request. On unsafe requests Angular adds the session-bound `X-Finance-CSRF` token it received from the authenticated session-status endpoint; the API rejects a missing or invalid token before an operation runs. A future Plaid access token will be exchanged and stored only by the backend, encrypted and scoped to that owner; the browser sees a short-lived Link token and connection status only. See the [V7 authentication design](V7_AUTHENTICATION_AND_AUTHORIZATION_DESIGN.md) for the full lifecycle and security constraints.
 
 ## Statement coverage tracker
 

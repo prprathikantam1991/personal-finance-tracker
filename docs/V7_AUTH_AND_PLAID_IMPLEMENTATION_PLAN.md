@@ -1,11 +1,12 @@
 # V7 — Authenticated, Multi-User Finance and Plaid Connections
 
-**Status:** in progress. Identity hardening, mandatory Finance authentication, owner-scoped ledger access, and browser session controls are implemented. Plaid remains planned.
+**Status:** in progress. Identity hardening, mandatory Finance authentication, owner-scoped ledger access, browser session controls, CSRF/CORS hardening, session expiry cleanup, and cross-user isolation tests are implemented. Plaid remains planned.
 
 ## Current implementation progress
 
 - **Complete:** Auth Service and User Service identity hardening foundation, including internal User Service authentication, OAuth provisioning safety, session invalidation, CSRF enablement, and identity-log redaction.
 - **Complete:** Finance Tracker ownership boundary. The database and user-facing finance flows persist and enforce `owner_user_id` derived only from a verified Finance session. The existing local ledger has been assigned to its verified internal user, and the one-time bootstrap code has been removed.
+- **Complete:** Browser session hardening. Unsafe Finance API calls require a session-bound CSRF token; credentialed CORS is restricted to the configured Angular origin; Finance sessions expire after 30 idle minutes or 8 hours absolute and are cleaned up on a schedule. Integration tests prove two owners cannot access or mutate one another's records.
 - **Planned next:** Plaid Link, encrypted Item storage, and sync/reconciliation flows.
 
 ## Goal

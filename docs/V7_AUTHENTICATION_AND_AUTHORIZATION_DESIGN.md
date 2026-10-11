@@ -1,6 +1,6 @@
 # V7 — Finance Tracker Authentication, Authorization, and Session Design
 
-**Status:** in progress. Owner-scoped data, Auth Service handoff, Finance server-side sessions, and browser sign-in/sign-out are implemented. CSRF enforcement and production-grade signed service assertions remain.
+**Status:** in progress. Owner-scoped data, Auth Service handoff, Finance server-side sessions, browser sign-in/sign-out, CSRF enforcement, CORS restriction, expiry cleanup, and cross-user isolation tests are implemented. Production-grade signed service assertions and coordinated upstream logout remain.
 
 ## Purpose
 
@@ -27,6 +27,8 @@ The current application has an authenticated ownership foundation:
 - Account lookup, account matching, account creation, card-term updates, transaction listing/edits, import history/review, transfer linking, remembered merchant-category rules, dashboard analytics, recurring detection, Assistant conversation history, and the Assistant's corresponding read-only tools already use that context and scope their queries by owner.
 
 The completed one-time conversion assigned the former local ledger to the verified internal User Service ID without re-importing statements. Its bootstrap table and runtime claim code have been removed. Authentication is now mandatory: the owner filter accepts only a verified Finance session, and each new record receives the owner from that session.
+
+Account matching is owner-scoped too. Its internal technical identity is stored as `owner_user_id|institution|last_four`, so two users may safely have accounts with the same bank and visible last four digits without a global uniqueness collision.
 
 ## Terms
 
@@ -149,14 +151,14 @@ The browser may send an account ID, transaction ID, or import ID, but it never s
 ### Creation
 
 - Finance Tracker creates a cryptographically random opaque session ID only after validating the one-time Auth Service handoff.
-- The session record lives in a private session store such as Redis and contains the internal owner UUID, issued time, absolute expiry, idle timeout, CSRF state, granted scopes, and optional upstream `sid`.
+- The current local session record lives in the private Finance SQLite store and contains the internal owner UUID, creation time, last-seen time, absolute expiry, and a cryptographically random CSRF token. A production deployment can move this table to Redis or a shared database without changing the browser contract.
 - The browser receives only the random session ID in an `HttpOnly`, `Secure`, `SameSite=Lax` cookie. For production, use HTTPS and a narrowly scoped domain/path. Local development may relax `Secure` only in an explicit local profile.
 - The Angular browser client enables `withCredentials` only for Finance Tracker API calls. It never sends an application user ID or bearer token from browser storage. The sign-in control is shown whenever the Finance session is absent or expired.
 
 ### Use and renewal
 
 - Finance Tracker checks the session on every request.
-- Use a short idle timeout and a fixed maximum lifetime. A practical first policy is a 30-minute idle timeout and an 8-hour absolute maximum, subject to product needs.
+- The implemented policy is a 30-minute idle timeout and an 8-hour absolute maximum. `last_seen_at` is touched at most every five minutes to avoid a database write on every request, and a scheduled task deletes expired or idle sessions every fifteen minutes.
 - Renewal happens server-side only after rechecking upstream authentication or an approved refresh path. JavaScript does not receive a long-lived refresh token.
 - Session identifiers rotate after login, privilege changes, and other authentication-boundary events to reduce session-fixation risk.
 
@@ -212,8 +214,8 @@ The LLM never sees a session ID, credential, Plaid access token, raw database, o
 
 - Use HTTPS in non-local environments.
 - Mark session cookies `HttpOnly`, `Secure`, and an appropriate `SameSite` value.
-- Require CSRF protection for state-changing cookie-authenticated endpoints: imports, category changes, session/logout operations, Plaid link/exchange/disconnect, and preference writes.
-- Use a narrow CORS allow-list for the Angular origin; never use wildcard origins with credentialed requests.
+- State-changing cookie-authenticated endpoints require a synchronizer token in `X-Finance-CSRF`. Finance Tracker returns this token only to an authenticated same-origin Angular session-status request; Angular keeps it in memory and attaches it only to unsafe Finance API calls. Missing or invalid tokens are rejected with `403`.
+- CORS permits credentials only for the configured Angular origin (`FINANCE_CORS_ALLOWED_ORIGIN`, default `http://localhost:4200`), exposes only the required request headers, and rejects other origins. It never uses wildcard origins with credentialed requests.
 - Avoid `localStorage` for access/refresh tokens and avoid exposing internal user IDs as an authorization mechanism.
 
 ## Observability without financial-data leakage
@@ -226,13 +228,12 @@ Allowed operational logs include a request/correlation ID, endpoint, response cl
 
 Audit events are separate from debug logs: successful/failed login, session revocation, Plaid Link/exchange/disconnect, and denied authorization attempts should record safe metadata and correlation IDs only.
 
-## Verification plan
+## Verification
 
-- Valid user can access only their own finance data.
-- User A cannot read, alter, import into, or delete user B's account, transaction, import, conversation, notification, preference, or Plaid Item—even with guessed IDs.
+- `FinanceSecurityIntegrationTest` creates two owners with separate sessions and proves that owner A cannot read owner B's import or Assistant conversation, cannot mutate owner B's transaction, and cannot see owner B's account. It also proves two owners can independently create accounts with the same bank/last-four identity.
+- The same suite proves missing CSRF tokens are rejected, valid tokens permit a mutation and logout, expired sessions receive `401` and are purged, and only the configured browser origin passes CORS preflight.
 - Expired, malformed, wrong-issuer, wrong-audience, replayed, and revoked credentials are rejected.
-- Logout invalidates both Finance and upstream Auth sessions.
-- Cross-site writes without a valid CSRF proof are rejected.
+- Finance logout invalidates the server-side Finance session. Coordinated upstream Auth logout remains a follow-up.
 - Browser JavaScript cannot read the Finance session cookie.
 - User Service outage prevents a new login/handoff from issuing a Finance session.
 - Assistant tools return only the authenticated owner's results.

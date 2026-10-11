@@ -119,7 +119,9 @@ public class AccountService {
     }
 
     private String buildIdentityKey(String institution, String lastFour) {
-        return institution == null || lastFour == null ? null : institution + "|" + lastFour;
+        // Keep the existing SQLite uniqueness constraint meaningful in a multi-user
+        // ledger: the same institution/account ending may legitimately exist for two owners.
+        return institution == null || lastFour == null ? null : currentOwnerUserId() + "|" + institution + "|" + lastFour;
     }
 
     private String normalizeInstitution(String value) {

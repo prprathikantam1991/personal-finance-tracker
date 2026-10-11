@@ -15,6 +15,8 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import com.pradeep.finance.security.FinanceOwnerContext;
+
 @Service
 public class RecurringTransactionService {
     private final JdbcTemplate jdbcTemplate;
@@ -25,10 +27,10 @@ public class RecurringTransactionService {
         List<Candidate> rows = jdbcTemplate.query("""
                 SELECT transaction_date, description, amount, category
                 FROM transactions
-                WHERE status = 'CONFIRMED' AND category NOT IN ('Transfer', 'Uncategorized')
+                WHERE owner_user_id = ? AND status = 'CONFIRMED' AND category NOT IN ('Transfer', 'Uncategorized')
                 ORDER BY transaction_date
                 """, (rs, row) -> new Candidate(LocalDate.parse(rs.getString("transaction_date")),
-                rs.getString("description"), rs.getBigDecimal("amount"), rs.getString("category")));
+                rs.getString("description"), rs.getBigDecimal("amount"), rs.getString("category")), FinanceOwnerContext.requireOwnerUserId());
 
         Map<String, List<Candidate>> groups = rows.stream().collect(Collectors.groupingBy(
                 row -> normalizeMerchant(row.description()) + "|" + row.category(), LinkedHashMap::new, Collectors.toList()));

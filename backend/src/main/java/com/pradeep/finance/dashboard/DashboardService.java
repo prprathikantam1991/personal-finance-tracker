@@ -9,6 +9,7 @@ import java.time.YearMonth;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import com.pradeep.finance.transaction.MerchantNormalizer;
+import com.pradeep.finance.security.FinanceOwnerContext;
 
 @Service
 public class DashboardService {
@@ -17,13 +18,14 @@ public class DashboardService {
     public DashboardService(JdbcTemplate jdbcTemplate, MerchantNormalizer merchantNormalizer) { this.jdbcTemplate = jdbcTemplate; this.merchantNormalizer = merchantNormalizer; }
 
     public DashboardSummary summary(LocalDate from, LocalDate to) {
+        String ownerUserId = ownerUserId();
         String dateFilter = " AND (? IS NULL OR t.transaction_date >= ?) AND (? IS NULL OR t.transaction_date <= ?)";
         Object[] dates = { from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString() };
-        BigDecimal income = amount("SELECT COALESCE(SUM(CASE WHEN a.account_type <> 'CREDIT_CARD' AND t.amount > 0 AND t.category = 'Income' THEN t.amount ELSE 0 END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.status='CONFIRMED'" + dateFilter, dates);
-        BigDecimal expenses = amount("SELECT COALESCE(SUM(CASE WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type = 'CREDIT_CARD' THEN t.amount WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type <> 'CREDIT_CARD' THEN -t.amount ELSE 0 END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.status='CONFIRMED'" + dateFilter, dates);
-        BigDecimal remittance = amount("SELECT COALESCE(SUM(CASE WHEN a.account_type = 'CREDIT_CARD' THEN t.amount ELSE -t.amount END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.status='CONFIRMED' AND t.category='India Remittance'" + dateFilter, dates);
-        Integer review = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM transactions WHERE status <> 'CONFIRMED' OR category = 'Uncategorized'", Integer.class);
-        List<DashboardSummary.CategoryTotal> categories = jdbcTemplate.query("SELECT t.category, SUM(CASE WHEN a.account_type='CREDIT_CARD' THEN t.amount ELSE -t.amount END) total FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')" + dateFilter + " GROUP BY t.category HAVING total <> 0 ORDER BY total DESC", (rs, row) -> new DashboardSummary.CategoryTotal(rs.getString(1), rs.getBigDecimal(2)), dates);
+        BigDecimal income = amount("SELECT COALESCE(SUM(CASE WHEN a.account_type <> 'CREDIT_CARD' AND t.amount > 0 AND t.category = 'Income' THEN t.amount ELSE 0 END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.owner_user_id = ? AND t.status='CONFIRMED'" + dateFilter, parameters(ownerUserId, dates));
+        BigDecimal expenses = amount("SELECT COALESCE(SUM(CASE WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type = 'CREDIT_CARD' THEN t.amount WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type <> 'CREDIT_CARD' THEN -t.amount ELSE 0 END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.owner_user_id = ? AND t.status='CONFIRMED'" + dateFilter, parameters(ownerUserId, dates));
+        BigDecimal remittance = amount("SELECT COALESCE(SUM(CASE WHEN a.account_type = 'CREDIT_CARD' THEN t.amount ELSE -t.amount END), 0) FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.owner_user_id = ? AND t.status='CONFIRMED' AND t.category='India Remittance'" + dateFilter, parameters(ownerUserId, dates));
+        Integer review = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM transactions WHERE owner_user_id = ? AND (status <> 'CONFIRMED' OR category = 'Uncategorized')", Integer.class, ownerUserId);
+        List<DashboardSummary.CategoryTotal> categories = jdbcTemplate.query("SELECT t.category, SUM(CASE WHEN a.account_type='CREDIT_CARD' THEN t.amount ELSE -t.amount END) total FROM transactions t LEFT JOIN accounts a ON a.id=t.account_id WHERE t.owner_user_id = ? AND t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')" + dateFilter + " GROUP BY t.category HAVING total <> 0 ORDER BY total DESC", (rs, row) -> new DashboardSummary.CategoryTotal(rs.getString(1), rs.getBigDecimal(2)), parameters(ownerUserId, dates));
         return new DashboardSummary(income, expenses, remittance, income.subtract(expenses).subtract(remittance), review == null ? 0 : review, categories);
     }
 
@@ -38,14 +40,14 @@ public class DashboardService {
                        COALESCE(SUM(CASE WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type = 'CREDIT_CARD' THEN t.amount WHEN t.category NOT IN ('Income','Transfer','India Remittance') AND a.account_type <> 'CREDIT_CARD' THEN -t.amount ELSE 0 END), 0) AS expenses,
                        COALESCE(SUM(CASE WHEN t.category = 'India Remittance' AND a.account_type = 'CREDIT_CARD' THEN t.amount WHEN t.category = 'India Remittance' THEN -t.amount ELSE 0 END), 0) AS remittance
                 FROM transactions t LEFT JOIN accounts a ON a.id = t.account_id
-                WHERE t.status = 'CONFIRMED' AND t.transaction_date >= ? AND t.transaction_date <= ?
+                WHERE t.owner_user_id = ? AND t.status = 'CONFIRMED' AND t.transaction_date >= ? AND t.transaction_date <= ?
                 GROUP BY substr(t.transaction_date, 1, 7)
                 """, rs -> {
             BigDecimal income = rs.getBigDecimal("income");
             BigDecimal expenses = rs.getBigDecimal("expenses");
             BigDecimal remittance = rs.getBigDecimal("remittance");
             byMonth.put(rs.getString("month"), new MonthlyTrend(rs.getString("month"), income, expenses, remittance, income.subtract(expenses).subtract(remittance)));
-        }, startMonth.atDay(1).toString(), endMonth.atEndOfMonth().toString());
+        }, ownerUserId(), startMonth.atDay(1).toString(), endMonth.atEndOfMonth().toString());
 
         return java.util.stream.IntStream.range(0, requestedMonths)
                 .mapToObj(startMonth::plusMonths)
@@ -85,7 +87,7 @@ public class DashboardService {
         jdbcTemplate.query("""
                 SELECT t.description, t.category, t.amount, a.account_type FROM transactions t
                 LEFT JOIN accounts a ON a.id = t.account_id
-                WHERE t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')
+                WHERE t.owner_user_id = ? AND t.status='CONFIRMED' AND t.category NOT IN ('Income','Transfer','India Remittance')
                 AND (? IS NULL OR t.transaction_date >= ?) AND (? IS NULL OR t.transaction_date <= ?)
                 AND (? IS NULL OR lower(t.category) = lower(?))
                 """, rs -> {
@@ -94,10 +96,12 @@ public class DashboardService {
             BigDecimal spend = "CREDIT_CARD".equals(rs.getString("account_type")) ? amount : amount.negate();
             MerchantTotal existing = totals.getOrDefault(merchant, MerchantTotal.empty());
             totals.put(merchant, new MerchantTotal(rs.getString("category"), existing.amount().add(spend), existing.count() + 1));
-        }, from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString(),
+        }, ownerUserId(), from == null ? null : from.toString(), from == null ? null : from.toString(), to == null ? null : to.toString(), to == null ? null : to.toString(),
                 category == null || category.isBlank() ? null : category, category == null || category.isBlank() ? null : category);
         return totals;
     }
     private record MerchantTotal(String category, BigDecimal amount, int count) { static MerchantTotal empty() { return new MerchantTotal("", BigDecimal.ZERO, 0); } }
     private BigDecimal amount(String sql, Object[] parameters) { BigDecimal value = jdbcTemplate.queryForObject(sql, BigDecimal.class, parameters); return value == null ? BigDecimal.ZERO : value; }
+    private String ownerUserId() { return FinanceOwnerContext.requireOwnerUserId(); }
+    private Object[] parameters(String ownerUserId, Object[] values) { Object[] result = new Object[values.length + 1]; result[0] = ownerUserId; System.arraycopy(values, 0, result, 1, values.length); return result; }
 }

@@ -16,11 +16,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 
 import com.pradeep.finance.transaction.MerchantNormalizer;
+import com.pradeep.finance.security.FinanceOwnerContext;
 
 class DashboardServiceTest {
 
     @Test
     void netsCreditCardRefundsBeforeReturningMerchantSpending() throws Exception {
+        FinanceOwnerContext.set("test-owner");
+        try {
         JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
         MerchantNormalizer normalizer = mock(MerchantNormalizer.class);
         when(normalizer.normalize(anyString())).thenAnswer(invocation -> invocation.getArgument(0));
@@ -39,6 +42,9 @@ class DashboardServiceTest {
             assertThat(merchant.merchant()).isEqualTo("Walmart");
             assertThat(merchant.amount()).isEqualByComparingTo("19.06");
         });
+        } finally {
+            FinanceOwnerContext.clear();
+        }
     }
 
     private ResultSet row(String description, BigDecimal amount) throws Exception {

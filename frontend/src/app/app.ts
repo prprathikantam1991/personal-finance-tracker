@@ -24,6 +24,7 @@ export class App implements OnInit {
   );
   protected readonly notificationOpen = signal(false);
   protected readonly profileOpen = signal(false);
+  protected readonly intentionallySignedOut = signal(sessionStorage.getItem('finance-tracker-intentionally-signed-out') === 'true');
   protected readonly profilePictureFailed = signal(false);
   protected readonly profileImageUrl = computed(() => {
     const picture = this.auth.profile()?.picture?.trim();
@@ -65,7 +66,14 @@ export class App implements OnInit {
   protected signOut(): void {
     this.closeNotifications();
     this.closeProfile();
+    sessionStorage.setItem('finance-tracker-intentionally-signed-out', 'true');
+    this.intentionallySignedOut.set(true);
     this.auth.signOut();
+  }
+  protected signIn(): void {
+    sessionStorage.removeItem('finance-tracker-intentionally-signed-out');
+    this.intentionallySignedOut.set(false);
+    this.auth.signIn();
   }
 
   protected updateAssistantDraft(event: Event): void { this.assistantDraft.set((event.target as HTMLTextAreaElement).value); }

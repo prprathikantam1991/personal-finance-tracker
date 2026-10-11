@@ -36,7 +36,7 @@
             }
           </div>
         } @else {
-          <button type="button" class="session-button primary" (click)="auth.signIn()">Sign in</button>
+          <button type="button" class="session-button primary" (click)="signIn()">Sign in</button>
         }
       }
     </div>
@@ -62,9 +62,9 @@
       <section class="signed-out-card">
         <span class="signed-out-mark" aria-hidden="true">F</span>
         <p class="eyebrow">FINANCE TRACKER</p>
-        <h1>You’re signed out</h1>
-        <p>Sign in to view your accounts, transactions, and financial insights.</p>
-        <button type="button" class="session-button primary" (click)="auth.signIn()">Sign in with Google</button>
+        <h1>{{ intentionallySignedOut() ? 'You’re signed out' : 'Welcome to Finance Tracker' }}</h1>
+        <p>{{ intentionallySignedOut() ? 'Sign in again to view your accounts, transactions, and financial insights.' : 'Sign in securely to access your accounts, transactions, and financial insights.' }}</p>
+        <button type="button" class="session-button primary" (click)="signIn()">Sign in with Google</button>
       </section>
     </main>
   }

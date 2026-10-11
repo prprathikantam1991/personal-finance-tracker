@@ -1,5 +1,5 @@
 import { Injectable, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 
 interface FinanceSessionStatus { authenticationEnabled: boolean; authenticated: boolean; csrfToken: string | null; }
 
@@ -35,11 +35,16 @@ export class FinanceAuthService {
   }
 
   signOut(): void {
-    // Hide protected screens immediately. A subsequent status check will restore
-    // access only if server-side logout did not actually invalidate the session.
+    // Preserve the synchronizer token for this one protected request. Clearing it
+    // before the request reaches the API would make the CSRF filter reject logout
+    // and leave the server-side session usable after a browser reload.
+    const csrfToken = this.csrfToken();
     this.authenticated.set(false);
     this.csrfToken.set(null);
-    this.http.post('http://localhost:8080/api/auth/logout', {}).subscribe({
+    const options = csrfToken
+      ? { headers: new HttpHeaders().set('X-Finance-CSRF', csrfToken) }
+      : {};
+    this.http.post('http://localhost:8080/api/auth/logout', {}, options).subscribe({
       next: () => undefined,
       error: () => undefined,
     });

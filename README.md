@@ -64,6 +64,19 @@ mvn spring-boot:run
 
 The API runs at `http://localhost:8080`. SQLite data is intentionally local at `backend/data/finance-tracker.db` and is ignored by Git.
 
+### Authenticated multi-user mode
+
+Finance Tracker requires the local Auth Service and User Service for browser sign-in. Auth Service performs Google login and provisions the stable internal user; Finance Tracker then creates its own opaque session and scopes all finance data to that user.
+
+Before starting the three services, configure the same two secrets in the relevant local environments:
+
+```text
+USER_SERVICE_API_KEY=...             # Auth Service + User Service
+FINANCE_HANDOFF_SERVICE_KEY=...      # Auth Service + Finance Tracker
+```
+
+Start User Service (`8082`), Redis, Auth Service (`8081`), the Finance backend (`8080`), then the Angular frontend (`4200`). The browser starts sign-in through Finance Tracker; it never stores a Google token or an internal user ID. See the [V7 authentication design](docs/V7_AUTHENTICATION_AND_AUTHORIZATION_DESIGN.md) and the Auth Service [integration contract](../java/auth-service/docs/FINANCE_TRACKER_INTEGRATION.md).
+
 ### Local logs
 
 The backend writes rolling local logs to `backend/data/logs/finance-tracker.log` (14 days, capped at 100 MB). They record operational events such as provider errors and agent-run metadata, but deliberately exclude API keys, raw assistant questions, answers, statements, and transaction rows.

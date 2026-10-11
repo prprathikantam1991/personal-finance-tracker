@@ -256,3 +256,5 @@ This design uses standard OAuth/OIDC responsibilities: an identity provider auth
 - [Architecture](ARCHITECTURE.md)
 - [Request flows](REQUEST_FLOWS.md)
 - [Design decisions](DESIGN_DECISIONS.md)
+- [Auth Service → Finance Tracker integration](../../java/auth-service/docs/FINANCE_TRACKER_INTEGRATION.md)
+- [User Service identity contract](../../java/user-service/docs/FINANCE_TRACKER_IDENTITY_CONTRACT.md)

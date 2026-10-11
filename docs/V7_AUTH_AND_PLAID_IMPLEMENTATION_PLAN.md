@@ -1,6 +1,6 @@
 # V7 — Authenticated, Multi-User Finance and Plaid Connections
 
-**Status:** in progress. Identity hardening, mandatory Finance authentication, owner-scoped ledger access, browser session controls, CSRF/CORS hardening, session expiry cleanup, and cross-user isolation tests are implemented. Plaid remains planned.
+**Status:** in progress. Identity hardening, mandatory Finance authentication, owner-scoped ledger access, browser session controls, CSRF/CORS hardening, session expiry cleanup, and cross-user isolation tests are implemented. The local Auth Service → Finance Tracker handoff is documented in each owning service. Plaid remains planned.
 
 ## Current implementation progress
 
@@ -47,6 +47,8 @@ Before wiring them into finance data, the shared services need a focused securit
 - document logout, token expiry, and error behavior.
 
 These are prerequisites, not cosmetic cleanup. The Finance Tracker must not turn on multi-user access until they are complete.
+
+The implemented local handoff uses a short-lived, single-use Redis code plus a backend-only service credential. This is suitable for the local three-service setup; production hardening still requires HTTPS and a signed assertion/JWKS or mTLS trust model, key rotation, and coordinated logout. See the [Auth Service contract](../../java/auth-service/docs/FINANCE_TRACKER_INTEGRATION.md) and [User Service identity contract](../../java/user-service/docs/FINANCE_TRACKER_IDENTITY_CONTRACT.md).
 
 ## How the services secure the Finance Tracker
 

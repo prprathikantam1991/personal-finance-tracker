@@ -52,10 +52,11 @@ public class FinanceSessionService {
                 sessionId, now.toString());
     }
 
-    public void invalidate(String sessionId) {
+    public boolean invalidate(String sessionId) {
         if (sessionId != null && !sessionId.isBlank()) {
-            jdbcTemplate.update("DELETE FROM finance_sessions WHERE id = ?", sessionId);
+            return jdbcTemplate.update("DELETE FROM finance_sessions WHERE id = ?", sessionId) > 0;
         }
+        return false;
     }
 
     public Duration sessionLifetime() {

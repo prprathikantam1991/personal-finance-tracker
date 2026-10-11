@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Controller;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +22,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 @RequestMapping("/api/auth")
 public class FinanceAuthenticationController {
+    private static final Logger log = LoggerFactory.getLogger(FinanceAuthenticationController.class);
     private final AuthServiceHandoffClient handoffClient;
     private final FinanceSessionService sessions;
     private final LegacyOwnerClaimService legacyOwnerClaimService;
@@ -75,9 +78,10 @@ public class FinanceAuthenticationController {
     @PostMapping("/logout")
     @ResponseBody
     public Map<String, Boolean> logout(jakarta.servlet.http.HttpServletRequest request, HttpServletResponse response) {
-        sessionCookie(request).ifPresent(sessions::invalidate);
+        boolean invalidated = sessionCookie(request).map(sessions::invalidate).orElse(false);
         response.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(cookieName, "")
                 .httpOnly(true).secure(cookieSecure).sameSite("Lax").path("/").maxAge(Duration.ZERO).build().toString());
+        log.info("Finance logout completed; server session invalidated={}", invalidated);
         return Map.of("signedOut", true);
     }
 

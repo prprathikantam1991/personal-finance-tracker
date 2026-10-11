@@ -5,7 +5,6 @@ import java.util.Optional;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -29,10 +28,10 @@ public class AuthServiceHandoffClient {
         try {
             @SuppressWarnings("unchecked")
             Map<String, Object> response = restClient.post()
-                    .uri("/auth/finance/handoff/exchange")
+                    .uri(uriBuilder -> uriBuilder.path("/auth/finance/handoff/exchange")
+                            .queryParam("code", code)
+                            .build())
                     .header("X-Finance-Handoff-Key", serviceKey)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(Map.of("code", code))
                     .retrieve()
                     .body(Map.class);
             Object ownerUserId = response == null ? null : response.get("ownerUserId");
